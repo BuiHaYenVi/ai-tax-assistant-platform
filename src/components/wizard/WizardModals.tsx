@@ -5,6 +5,7 @@ import {
   CheckCircle2, 
   ShieldCheck 
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface BaseModalProps {
   isOpen: boolean;
@@ -61,12 +62,29 @@ export const AddManualIncomeModal: React.FC<{ isOpen: boolean; onClose: () => vo
   );
 };
 
+export interface ViewScanModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  fileName?: string;
+  payerName?: string;
+  payerMst?: string;
+  grossIncome?: number;
+  taxWithheld?: number;
+}
+
 // 2. Modal Xem bản scan chứng từ
-export const ViewScanModal: React.FC<{ isOpen: boolean; onClose: () => void; fileName?: string }> = ({
+export const ViewScanModal: React.FC<ViewScanModalProps> = ({
   isOpen,
   onClose,
-  fileName = 'Chung_tu_thue_ABC.pdf'
+  fileName = 'Chung_Tu_Khau_Tru_2024.pdf',
+  payerName = 'Công ty Cổ phần Công nghệ ABC',
+  payerMst = '0312345678',
+  grossIncome = 180000000,
+  taxWithheld = 14200000,
 }) => {
+  const { user } = useAuth();
+  const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN').format(val);
+
   return (
     <WizardBaseModal isOpen={isOpen} onClose={onClose} title={`Xem chi tiết bản scan: ${fileName}`}>
       <div className="space-y-4 text-xs">
@@ -78,26 +96,30 @@ export const ViewScanModal: React.FC<{ isOpen: boolean; onClose: () => void; fil
           </p>
           <div className="mt-3 inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-semibold text-xs">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Chữ ký số hợp lệ: Công ty Cổ phần Công nghệ ABC</span>
+            <span>Chữ ký số hợp lệ: {payerName}</span>
           </div>
         </div>
 
         <div className="border border-slate-200 rounded-xl p-3 space-y-1.5 bg-white text-[11px]">
           <div className="flex justify-between py-1 border-b border-slate-100">
+            <span className="text-slate-500">Đơn vị chi trả thu nhập:</span>
+            <span className="font-bold text-slate-800">{payerName}</span>
+          </div>
+          <div className="flex justify-between py-1 border-b border-slate-100">
             <span className="text-slate-500">Mã số thuế tổ chức chi trả:</span>
-            <span className="font-mono font-bold text-slate-800">0312345678</span>
+            <span className="font-mono font-bold text-slate-800">{payerMst}</span>
           </div>
           <div className="flex justify-between py-1 border-b border-slate-100">
             <span className="text-slate-500">Người nộp thuế:</span>
-            <span className="font-bold text-slate-800">Nguyễn Hoàng Nam (MST: 8492019381)</span>
+            <span className="font-bold text-slate-800">{user?.fullName || 'Người nộp thuế'} (MST: {user?.mst || 'Chưa cập nhật'})</span>
           </div>
           <div className="flex justify-between py-1 border-b border-slate-100">
             <span className="text-slate-500">Mục [10] Tổng thu nhập chịu thuế:</span>
-            <span className="font-mono font-bold text-slate-800">180.000.000 VNĐ</span>
+            <span className="font-mono font-bold text-slate-800">{formatCurrency(grossIncome)} VNĐ</span>
           </div>
           <div className="flex justify-between py-1">
             <span className="text-slate-500">Mục [14] Số thuế TNCN đã khấu trừ:</span>
-            <span className="font-mono font-bold text-emerald-700">14.200.000 VNĐ</span>
+            <span className="font-mono font-bold text-emerald-700">{formatCurrency(taxWithheld)} VNĐ</span>
           </div>
         </div>
 

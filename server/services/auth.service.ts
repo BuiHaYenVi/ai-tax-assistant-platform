@@ -5,6 +5,8 @@
 
 import bcrypt from 'bcryptjs';
 import { PoolClient } from 'pg';
+import { pool } from '../config/database';
+import { emailService } from './email.service';
 import { userRepository } from '../repositories/user.repository';
 import { tokenService } from './token.service';
 import { 
@@ -26,6 +28,51 @@ import type {
 
 export class AuthService {
   /**
+   * Sinh và gửi mã OTP xác thực đăng ký tài khoản qua Email
+   */
+  public async sendRegisterOtp(email: string, client?: PoolClient): Promise<{ message: string }> {
+    if (!email || !email.trim()) {
+      throw new ValidationError('Địa chỉ email là bắt buộc.');
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      throw new ValidationError('Định dạng địa chỉ email không hợp lệ.');
+    }
+
+    // 1. Kiểm tra email đã được đăng ký trong hệ thống chưa
+    const existingUser = await userRepository.findByEmail(trimmedEmail, client);
+    if (existingUser) {
+      throw new ConflictError('Địa chỉ email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng email khác.');
+    }
+
+    // 2. Tạo mã OTP 6 số ngẫu nhiên
+    const otpCode = emailService.generateOtpCode();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
+
+    const runner = client || pool;
+
+    // 3. Thu hồi/xóa các mã OTP chưa sử dụng trước đó cho email này
+    await runner.query(
+      `DELETE FROM email_verifications WHERE email = $1 AND is_verified = FALSE;`,
+      [trimmedEmail]
+    );
+
+    // 4. Lưu mã OTP mới vào cơ sở dữ liệu
+    await runner.query(
+      `INSERT INTO email_verifications (email, otp_code, expires_at) VALUES ($1, $2, $3);`,
+      [trimmedEmail, otpCode, expiresAt]
+    );
+
+    // 5. Gửi email xác thực kèm OTP
+    await emailService.sendRegisterOtp(trimmedEmail, otpCode);
+
+    return {
+      message: 'Mã xác thực OTP đã được gửi về email của bạn (hiệu lực trong 5 phút).',
+    };
+  }
+
+  /**
    * Đăng ký tài khoản người nộp thuế mới
    */
   public async register(dto: RegisterRequestDto, client?: PoolClient): Promise<LoginResponseDto> {
@@ -40,6 +87,44 @@ export class AuthService {
     }
 
     const trimmedEmail = dto.email.trim().toLowerCase();
+
+    // Kiểm tra mã OTP xác thực email
+    if (!dto.otpCode || dto.otpCode.trim().length !== 6) {
+      throw new ValidationError('Vui lòng cung cấp mã xác thực OTP gồm đúng 6 chữ số.');
+    }
+
+    const runner = client || pool;
+    const otpRes = await runner.query(
+      `SELECT id, otp_code, expires_at, is_verified 
+       FROM email_verifications 
+       WHERE email = $1 
+       ORDER BY created_at DESC 
+       LIMIT 1;`,
+      [trimmedEmail]
+    );
+
+    if (otpRes.rows.length === 0) {
+      throw new ValidationError('Không tìm thấy yêu cầu gửi mã OTP cho email này. Vui lòng nhấn nhận mã OTP trước.');
+    }
+
+    const latestOtp = otpRes.rows[0];
+    if (latestOtp.is_verified) {
+      throw new ValidationError('Mã OTP này đã được sử dụng. Vui lòng yêu cầu gửi mã mới.');
+    }
+
+    if (new Date() > new Date(latestOtp.expires_at)) {
+      throw new ValidationError('Mã xác thực OTP đã hết hạn (chỉ có hiệu lực trong 5 phút). Vui lòng nhấn gửi lại mã mới.');
+    }
+
+    if (latestOtp.otp_code !== dto.otpCode.trim()) {
+      throw new ValidationError('Mã xác thực OTP không chính xác. Vui lòng kiểm tra lại.');
+    }
+
+    // Đánh dấu mã OTP đã được xác minh thành công
+    await runner.query(
+      `UPDATE email_verifications SET is_verified = TRUE WHERE id = $1;`,
+      [latestOtp.id]
+    );
 
     // 1. Kiểm tra chống trùng lặp email
     const existingEmail = await userRepository.findByEmail(trimmedEmail, client);
@@ -225,6 +310,10 @@ export class AuthService {
         status: user.status,
         mst: user.mst,
         cccd: user.cccd,
+        address: user.address,
+        dateOfBirth: user.date_of_birth ? String(user.date_of_birth).slice(0, 10) : null,
+        taxDepartmentName: user.tax_department_name,
+        taxDepartmentCode: user.tax_department_code,
       },
     };
   }
@@ -245,6 +334,42 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  /**
+   * Cấp mới Access Token từ Refresh Token hợp lệ
+   */
+  public async refreshToken(
+    refreshTokenString: string,
+    client?: PoolClient
+  ): Promise<{ accessToken: string; refreshToken: string; tokenType: 'Bearer'; expiresIn: number }> {
+    const cleanToken = refreshTokenString.replace(/^Bearer\s+/i, '').trim();
+    const payload = tokenService.verifyRefreshToken(cleanToken);
+
+    const user = await userRepository.findById(payload.userId, client);
+    if (!user) {
+      throw new UnauthorizedError('Không tìm thấy tài khoản người dùng tương ứng với token.', 'USER_NOT_FOUND');
+    }
+    if (user.status === 'locked') {
+      throw new AccountStatusError('Tài khoản hiện đang bị khóa.', 'ACCOUNT_LOCKED');
+    }
+
+    const userContext: UserContext = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      fullName: user.fullName,
+    };
+
+    const newAccessToken = tokenService.generateAccessToken(userContext);
+    const newRefreshToken = tokenService.generateRefreshToken(userContext);
+
+    return {
+      accessToken: newAccessToken.token,
+      refreshToken: newRefreshToken.token,
+      tokenType: 'Bearer',
+      expiresIn: newAccessToken.expiresIn,
+    };
   }
 
   /**

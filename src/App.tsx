@@ -4,6 +4,7 @@
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
+import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TaxFilingProvider } from './contexts/TaxFilingContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -29,6 +30,7 @@ import { AdminPage } from './pages/AdminPage';
 // Khung Giao diện dùng chung
 import { Sidebar } from './components/dashboard/Sidebar';
 import { Header } from './components/dashboard/Header';
+import { TaxChatWidget } from './components/chat/TaxChatWidget';
 
 export type ScreenType = 
   | 'login' | 'register' | 'dashboard' 
@@ -64,26 +66,32 @@ const AppContent: React.FC = () => {
   // 1. Nhóm Không có Sidebar (Auth Layout: Đăng nhập / Đăng ký)
   if (currentScreen === 'login') {
     return (
-      <LoginPage
-        onLoginSuccess={(role) => {
-          const userRole = role || user?.role || storageUtil.getUserProfile()?.role;
-          if (userRole === 'admin_manager' || userRole === 'super_admin') {
-            setCurrentScreen('admin');
-          } else {
-            setCurrentScreen('dashboard');
-          }
-        }}
-        onNavigateToRegister={() => setCurrentScreen('register')}
-      />
+      <>
+        <LoginPage
+          onLoginSuccess={(role) => {
+            const userRole = role || user?.role || storageUtil.getUserProfile()?.role;
+            if (userRole === 'admin_manager' || userRole === 'super_admin') {
+              setCurrentScreen('admin');
+            } else {
+              setCurrentScreen('dashboard');
+            }
+          }}
+          onNavigateToRegister={() => setCurrentScreen('register')}
+        />
+        <TaxChatWidget />
+      </>
     );
   }
 
   if (currentScreen === 'register') {
     return (
-      <RegisterPage
-        onNavigateToLogin={() => setCurrentScreen('login')}
-        onRegisterSuccess={() => setCurrentScreen('dashboard')}
-      />
+      <>
+        <RegisterPage
+          onNavigateToLogin={() => setCurrentScreen('login')}
+          onRegisterSuccess={() => setCurrentScreen('login')}
+        />
+        <TaxChatWidget />
+      </>
     );
   }
 
@@ -101,7 +109,7 @@ const AppContent: React.FC = () => {
       />
 
       {/* 2. Thân trang 2 cột */}
-      <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-4 py-4 gap-6">
+      <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-6 pb-12 gap-6">
         {/* Cột 1: Sidebar bên trái cố định (w-64 flex-shrink-0) */}
         <aside className="w-64 flex-shrink-0 hidden md:block">
           <Sidebar currentScreen={currentScreen} onNavigate={setCurrentScreen} />
@@ -244,17 +252,22 @@ const AppContent: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Floating Trợ lý ThuTra AI Chatbot */}
+      {currentScreen !== 'chat' && currentScreen !== 'chatbot' && <TaxChatWidget />}
     </div>
   );
 };
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <TaxFilingProvider>
-        <AppContent />
-      </TaxFilingProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <TaxFilingProvider>
+          <AppContent />
+        </TaxFilingProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 };
 

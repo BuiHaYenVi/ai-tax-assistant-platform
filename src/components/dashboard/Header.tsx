@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { 
+  FileText,
   Search, 
   Smartphone, 
   Bell, 
@@ -7,6 +8,8 @@ import {
   ChevronDown 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/ToastContext';
+import { NotificationDropdown } from './NotificationDropdown';
 import type { ScreenType } from '../../App';
 
 interface HeaderProps {
@@ -35,9 +38,11 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout
 }) => {
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const [internalTab, setInternalTab] = useState<'year' | 'form' | 'guide'>('year');
   const [searchVal, setSearchVal] = useState('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const getInitials = (name?: string) => {
     if (!name) return 'TT';
@@ -60,8 +65,32 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/90 px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-      {/* Left: Brand/Badge + Search box */}
-      <div className="flex items-center gap-3 flex-1 max-w-md">
+      {/* Left: Brand/Logo + Search box */}
+      <div className="flex items-center gap-3.5 flex-1 max-w-xl">
+        {/* Brand Logo ThuTra */}
+        <div 
+          onClick={() => {
+            if (onNavigate) onNavigate('dashboard');
+          }}
+          className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+          title="Về Trang chủ Tổng quan quyết toán"
+        >
+          <div className="w-9 h-9 rounded-xl bg-[#046a4e] flex items-center justify-center text-white shadow-2xs shrink-0">
+            <FileText className="w-5 h-5 text-emerald-100" />
+          </div>
+          <div className="hidden xl:flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-slate-900 text-sm tracking-tight leading-none">ThuTra TNCN</span>
+              <span className="bg-[#dcfce7] text-[#15803d] text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                THÔNG MINH
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5">
+              Hệ thống Quyết toán Thuế Cá nhân
+            </span>
+          </div>
+        </div>
+
         {currentScreen === 'admin' && (
           <div className="hidden lg:flex items-center gap-1.5 bg-emerald-50 text-[#046a4e] border border-emerald-200 text-[11px] font-bold px-2.5 py-1 rounded-lg shrink-0 select-none shadow-2xs">
             <span className="w-1.5 h-1.5 rounded-full bg-[#046a4e]"></span>
@@ -154,9 +183,9 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* MST Pill */}
-        <div className="hidden xl:flex items-center gap-1 bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 select-none">
+        <div className="hidden xl:flex items-center gap-1.5 bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 select-none">
           <span className="text-slate-400 font-sans font-normal">MST:</span>
-          <span>8492019381</span>
+          <span>{user?.mst || 'Chưa cập nhật'}</span>
         </div>
 
         {/* Nộp eTax Mobile Button */}
@@ -175,15 +204,31 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Notifications & User profile */}
       <div className="flex items-center gap-3">
-        {/* Notification Bell */}
-        <button 
-          type="button"
-          aria-label="Thông báo"
-          className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full ring-2 ring-white"></span>
-        </button>
+        {/* Notification Bell with Dropdown */}
+        <div className="relative">
+          <button 
+            type="button"
+            aria-label="Thông báo"
+            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            className={`relative p-2 rounded-xl transition-colors cursor-pointer ${
+              isNotificationOpen 
+                ? 'text-[#046a4e] bg-emerald-50' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-emerald-600 text-white text-[10px] font-bold rounded-full px-1 flex items-center justify-center ring-2 ring-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          <NotificationDropdown
+            isOpen={isNotificationOpen}
+            onClose={() => setIsNotificationOpen(false)}
+          />
+        </div>
 
         {/* Help Icon */}
         <button 

@@ -5,6 +5,7 @@ import {
   ArrowRight 
 } from 'lucide-react';
 import { mockSynchronizedProfile } from '../../data/mockChatData';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SyncedProfileSidebarProps {
   onOpenSettlementForm?: () => void;
@@ -13,7 +14,10 @@ interface SyncedProfileSidebarProps {
 export const SyncedProfileSidebar: React.FC<SyncedProfileSidebarProps> = ({
   onOpenSettlementForm
 }) => {
+  const { user } = useAuth();
   const profile = mockSynchronizedProfile;
+  const taxpayerName = user?.fullName || profile.taxpayerName;
+  const mst = user?.mst || profile.mst;
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
@@ -34,12 +38,12 @@ export const SyncedProfileSidebar: React.FC<SyncedProfileSidebarProps> = ({
       <div className="space-y-2 text-xs">
         <div className="flex items-center justify-between py-1 border-b border-slate-100/70">
           <span className="text-slate-500">Người nộp thuế:</span>
-          <span className="font-bold text-slate-900">{profile.taxpayerName}</span>
+          <span className="font-bold text-slate-900">{taxpayerName}</span>
         </div>
 
         <div className="flex items-center justify-between py-1 border-b border-slate-100/70">
           <span className="text-slate-500">Mã số thuế cá nhân:</span>
-          <span className="font-mono font-bold text-slate-900">{profile.mst}</span>
+          <span className="font-mono font-bold text-slate-900">{mst}</span>
         </div>
 
         <div className="flex items-center justify-between py-1">

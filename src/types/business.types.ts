@@ -33,10 +33,15 @@ export interface LoginResponseDto {
   };
 }
 
+export interface SendOtpRequestDto {
+  email: string;
+}
+
 export interface RegisterRequestDto {
   fullName: string;
   email: string;
   password: string;
+  otpCode?: string;
   phone?: string;
   cccd?: string;
 }
@@ -48,6 +53,8 @@ export interface UserProfileDto {
   fullName: string;
   cccd?: string | null;
   mst?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
   role: UserRole;
   status: UserStatus;
   isVneidVerified: boolean;
@@ -64,8 +71,15 @@ export interface UpdateUserProfileDto {
   fullName?: string;
   phone?: string;
   address?: string;
+  mst?: string;
+  taxCode?: string;
   taxDepartmentCode?: string;
   taxDepartmentName?: string;
+  cccd?: string;
+  idNumber?: string;
+  idCard?: string;
+  dateOfBirth?: string;
+  dob?: string;
 }
 
 export interface ChangePasswordDto {

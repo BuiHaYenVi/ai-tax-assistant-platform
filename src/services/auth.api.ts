@@ -9,12 +9,21 @@ import type {
   LoginRequestDto,
   LoginResponseDto,
   RegisterRequestDto,
+  SendOtpRequestDto,
   UserProfileDto,
   UpdateUserProfileDto,
   ChangePasswordDto,
 } from '../types/business.types';
 
 export const authApi = {
+  /**
+   * Gửi mã OTP xác thực email trước khi đăng ký
+   * POST /auth/send-register-otp
+   */
+  async sendRegisterOtp(payload: SendOtpRequestDto): Promise<ApiResponse<null>> {
+    return apiClient.post<null>('/auth/send-register-otp', payload);
+  },
+
   /**
    * Đăng nhập tài khoản người dùng, nhận Access Token & Refresh Token
    * POST /auth/login

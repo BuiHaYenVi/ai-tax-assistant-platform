@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Step1Header } from './Step1Header';
 import { PersonalTaxpayerCard } from './PersonalTaxpayerCard';
 import { DependentListCard } from './DependentListCard';
@@ -8,6 +8,7 @@ import { Step1Footer } from './Step1Footer';
 import { DependentModal } from './Step1Modals';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTaxFiling } from '../../contexts/TaxFilingContext';
+import { useToast } from '../../contexts/ToastContext';
 import type { PersonalTaxpayer, Dependent } from '../../data/mockWizardStep1';
 import type { CreateDependentDto } from '../../types/business.types';
 
@@ -23,6 +24,7 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
   onStepClick
 }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { 
     activeProfile, 
     profilesList, 
@@ -34,19 +36,44 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
     createNewProfile 
   } = useTaxFiling();
 
-  const [taxpayer, setTaxpayer] = useState<PersonalTaxpayer>(() => ({
-    fullName: user?.fullName || 'Người nộp thuế',
-    cccd: user?.cccd || '079090001234',
-    mst: user?.mst || '8492019482',
-    taxOffice: user?.taxDepartmentName || 'Cục Thuế TP Hồ Chí Minh',
-    email: user?.email || 'user@example.com',
-    phone: user?.phone || '0909123456',
-    address: 'TP. Hồ Chí Minh',
-    isVerifiedVNeID: user?.isVneidVerified ?? true,
-    personalDeductionPerMonth: 11000000,
-    personalDeductionMonths: 12,
-    totalPersonalDeduction: 132000000
-  }));
+  const [taxpayer, setTaxpayer] = useState<PersonalTaxpayer>(() => {
+    let savedLocal: any = null;
+    try {
+      const raw = localStorage.getItem('thutra_user_profile');
+      if (raw) savedLocal = JSON.parse(raw);
+    } catch {}
+
+    return {
+      fullName: user?.fullName || savedLocal?.fullName || 'Người nộp thuế',
+      cccd: user?.cccd || savedLocal?.cccd || savedLocal?.idCard || '079090001234',
+      mst: user?.mst || savedLocal?.mst || '8492019482',
+      taxOffice: user?.taxDepartmentName || savedLocal?.taxDepartment || 'Cục Thuế TP Hồ Chí Minh',
+      email: user?.email || savedLocal?.email || 'user@example.com',
+      phone: user?.phone || savedLocal?.phone || '0909123456',
+      address: user?.address || savedLocal?.address || 'TP. Hồ Chí Minh',
+      isVerifiedVNeID: user?.isVneidVerified ?? true,
+      personalDeductionPerMonth: 11000000,
+      personalDeductionMonths: 12,
+      totalPersonalDeduction: 132000000
+    };
+  });
+
+  // Tự động đồng bộ thông tin người nộp thuế từ AuthContext / Profile khi user thay đổi
+  useEffect(() => {
+    if (user) {
+      setTaxpayer((prev) => ({
+        ...prev,
+        fullName: user.fullName || prev.fullName,
+        cccd: user.cccd || prev.cccd,
+        mst: user.mst || prev.mst,
+        taxOffice: user.taxDepartmentName || prev.taxOffice,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone,
+        address: user.address || prev.address,
+        isVerifiedVNeID: user.isVneidVerified ?? prev.isVerifiedVNeID,
+      }));
+    }
+  }, [user]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDependent, setEditingDependent] = useState<Dependent | null>(null);
@@ -149,6 +176,7 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
           endMonth: `${currentYear}-12`,
           monthsApplied,
         });
+        toast.success('✓ Cập nhật thông tin người phụ thuộc thành công.');
       } else {
         // Thêm người phụ thuộc mới
         const payload: CreateDependentDto = {
@@ -166,10 +194,11 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
         };
 
         await addDependent(payload);
+        toast.success('✓ Thêm người phụ thuộc thành công! Đã cập nhật mức giảm trừ gia cảnh.');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể lưu người phụ thuộc. Vui lòng kiểm tra lại thông tin!';
-      alert(msg);
+      toast.error(msg);
     } finally {
       setEditingDependent(null);
       setIsModalOpen(false);
@@ -181,9 +210,10 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
     if (window.confirm('Bạn có chắc chắn muốn xóa người phụ thuộc này khỏi hồ sơ?')) {
       try {
         await removeDependent(id);
+        toast.success('✓ Xóa thông tin người phụ thuộc thành công.');
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Không thể xóa người phụ thuộc.';
-        alert(msg);
+        toast.error(msg);
       }
     }
   };
@@ -212,9 +242,10 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
         monthsApplied: 12,
         commitmentChecked: true,
       });
+      toast.success('✓ Thêm người phụ thuộc thành công! Đã cập nhật mức giảm trừ gia cảnh.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể thêm nhanh người phụ thuộc.';
-      alert(msg);
+      toast.error(msg);
     }
   };
 
@@ -309,7 +340,10 @@ export const WizardStep1Page: React.FC<WizardStep1PageProps> = ({
       {/* 3. Bottom Sticky Action Bar */}
       <Step1Footer
         onBackDashboard={onBackDashboard}
-        onProceedToStep2={onProceedToStep2}
+        onProceedToStep2={() => {
+          toast.success('✓ Đã lưu dữ liệu Bước 1 và chuyển tiếp sang kê khai nguồn thu nhập.');
+          if (onProceedToStep2) onProceedToStep2();
+        }}
       />
 
       {/* 4. Modal Add/Edit Dependent */}

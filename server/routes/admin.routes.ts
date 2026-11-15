@@ -5,10 +5,14 @@
 
 import { Router } from 'express';
 import { adminController } from '../controllers/admin.controller';
+import { ragRouter } from './rag.routes';
 import { authMiddleware, requireRoles } from '../middlewares/auth.middleware';
 import { dbSessionMiddleware } from '../middlewares/db-session.middleware';
 
 const router = Router();
+
+// Gắn nhánh router Kho tri thức RAG (/api/admin/rag)
+router.use('/rag', ragRouter);
 
 /**
  * @route   GET /api/admin/rules

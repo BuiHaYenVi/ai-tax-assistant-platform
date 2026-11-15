@@ -19,6 +19,7 @@ import {
   X
 } from 'lucide-react';
 import type { ScreenType } from '../App';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SettlementHistoryPageProps {
   onNavigate?: (screen: ScreenType) => void;
@@ -145,6 +146,7 @@ export const SettlementHistoryPage: React.FC<SettlementHistoryPageProps> = ({
   onNavigateToDashboard,
   onNavigateToWizard2
 }) => {
+  const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'draft' | 'refunded' | 'authorized'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<SettlementRecord | null>(null);
@@ -158,8 +160,8 @@ export const SettlementHistoryPage: React.FC<SettlementHistoryPageProps> = ({
     <THdon>Tờ khai quyết toán thuế thu nhập cá nhân 02/QTT-TNCN</THdon>
     <KyKKhai>Năm ${record.year}</KyKKhai>
     <MaHSo>${record.declarationCode}</MaHSo>
-    <MST>8492019381</MST>
-    <TenNNT>Nguyễn Hoàng Nam</TenNNT>
+    <MST>${user?.mst || '8492019381'}</MST>
+    <TenNNT>${user?.fullName || 'Người nộp thuế'}</TenNNT>
     <CQTTiepNhan>${record.taxOffice}</CQTTiepNhan>
   </TTChung>
   <NDung>

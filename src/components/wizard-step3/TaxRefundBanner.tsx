@@ -1,25 +1,33 @@
+import React from 'react';
 import { 
   ShieldCheck, 
   Building2, 
   Check,
-  AlertCircle
+  AlertCircle,
+  HelpCircle
 } from 'lucide-react';
 import { useTaxFiling } from '../../contexts/TaxFilingContext';
 
+const formatVndMoney = (num?: number | null): string => {
+  if (num === undefined || num === null || isNaN(num)) return '0 đ';
+  return `${new Intl.NumberFormat('vi-VN').format(Math.round(num))} đ`;
+};
+
 export const TaxRefundBanner: React.FC = () => {
   const { activeProfile, latestAuditResult } = useTaxFiling();
+  const calc = latestAuditResult?.calculation;
   const financial = activeProfile?.financialSummary;
 
-  const taxWithheld = financial?.taxWithheldTotal ?? 0;
-  const taxPayable = financial?.taxPayable ?? 0;
-  const balance = financial?.taxBalance ?? (taxWithheld - taxPayable);
-  const taxOverpaid = balance > 0 ? balance : 0;
-  const taxUnderpaid = balance < 0 ? Math.abs(balance) : 0;
+  const taxWithheld = calc?.taxDeducted ?? financial?.taxWithheldTotal ?? 0;
+  const taxPayable = calc?.taxLiability ?? financial?.taxPayable ?? 0;
+  
+  // Số tiền chênh lệch từ kết quả chạy thật của Rule Engine & Audit Service
+  const taxOverpaid = calc ? calc.taxRefund : (taxWithheld > taxPayable ? taxWithheld - taxPayable : 0);
+  const taxUnderpaid = calc ? calc.taxPayable : (taxPayable > taxWithheld ? taxPayable - taxWithheld : 0);
+  const isBalanced = taxOverpaid === 0 && taxUnderpaid === 0;
 
   const rulesScanned = latestAuditResult?.totalRulesScanned ?? 15;
   const taxYear = activeProfile?.taxYear ?? 2025;
-
-  const formatVndMoney = (num: number) => `${new Intl.NumberFormat('vi-VN').format(Math.round(num))} đ`;
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
@@ -43,59 +51,78 @@ export const TaxRefundBanner: React.FC = () => {
       {/* 2. Main Verdict Split Card */}
       <div className={`border rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs ${
         taxUnderpaid > 0 
-          ? 'bg-amber-50/60 border-amber-200' 
+          ? 'bg-rose-50/70 border-rose-300' 
+          : isBalanced
+          ? 'bg-slate-50 border-slate-200'
           : 'bg-[#f0fbf7] border-emerald-200/90'
       }`}>
         {/* Left Side: Estimated Refund / Underpaid */}
         <div className="space-y-1 max-w-md">
           <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1 ${
             taxUnderpaid > 0 
-              ? 'bg-amber-100 text-amber-800' 
+              ? 'bg-rose-100 text-rose-800' 
+              : isBalanced
+              ? 'bg-slate-200 text-slate-800'
               : 'bg-emerald-100 text-emerald-800'
           }`}>
             {taxUnderpaid > 0 ? (
               <>
-                <AlertCircle className="w-3 h-3" />
+                <AlertCircle className="w-3 h-3 text-rose-600" />
                 <span>CẦN NỘP THÊM THUẾ TNCN</span>
+              </>
+            ) : isBalanced ? (
+              <>
+                <HelpCircle className="w-3 h-3 text-slate-600" />
+                <span>CÂN BẰNG NGHĨA VỤ THUẾ</span>
               </>
             ) : (
               <>
-                <Check className="w-3 h-3 stroke-[3]" />
+                <Check className="w-3 h-3 stroke-[3] text-emerald-700" />
                 <span>ĐỦ ĐIỀU KIỆN NHẬN HOÀN THUẾ</span>
               </>
             )}
           </span>
 
           <div className={`text-3xl font-extrabold tracking-tight ${
-            taxUnderpaid > 0 ? 'text-amber-600' : 'text-[#046a4e]'
+            taxUnderpaid > 0 ? 'text-rose-600' : isBalanced ? 'text-slate-800' : 'text-[#046a4e]'
           }`}>
             {taxUnderpaid > 0 
               ? `-${new Intl.NumberFormat('vi-VN').format(taxUnderpaid)} VNĐ` 
+              : isBalanced
+              ? '0 VNĐ'
               : `+${new Intl.NumberFormat('vi-VN').format(taxOverpaid)} VNĐ`}
           </div>
 
           <p className="text-[11px] text-slate-600 leading-relaxed">
             {taxUnderpaid > 0 
-              ? 'Vui lòng hoàn thành nộp số thuế còn thiếu trước ngày 30/04/2025 vào tài khoản Thu Ngân sách Nhà nước để tránh tiền chậm nộp 0.03%/ngày.' 
-              : 'Kho Bạc Nhà nước sẽ hoàn trả trực tiếp vào tài khoản ngân hàng thụ hưởng đã đăng ký eTax của bạn sau khi CQT duyệt hồ sơ điện tử.'}
+              ? 'Vui lòng hoàn thành nộp số thuế còn thiếu vào tài khoản Thu Ngân sách Nhà nước để tránh tiền chậm nộp 0.03%/ngày theo quy định tại Luật Quản lý Thuế.' 
+              : isBalanced
+              ? 'Số thuế đã khấu trừ tại nguồn hoàn toàn trùng khớp với nghĩa vụ phát sinh trong năm. Bạn không phát sinh số tiền phải nộp thêm hoặc hoàn trả.'
+              : 'Kho Bạc Nhà nước sẽ hoàn trả trực tiếp vào tài khoản ngân hàng thụ hưởng đã đăng ký eTax của bạn sau khi Cơ quan Thuế duyệt hồ sơ điện tử.'}
           </p>
         </div>
 
         {/* Right Side: Quick Stats Box */}
         <div className="bg-white/80 border border-slate-200/80 rounded-xl p-3 px-4 min-w-[220px] space-y-1 self-stretch md:self-auto flex flex-col justify-center shadow-2xs">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-slate-500 text-[11px]">Tổng thuế đã nộp:</span>
+            <span className="text-slate-500 text-[11px]">Tổng thuế đã khấu trừ:</span>
             <span className="font-bold text-slate-900 font-mono">
               {formatVndMoney(taxWithheld)}
             </span>
           </div>
 
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-slate-500 text-[11px]">Nghĩa vụ thực tế:</span>
+            <span className="text-slate-500 text-[11px]">Nghĩa vụ thuế thực tế:</span>
             <span className="font-semibold text-slate-700 font-mono">
               {formatVndMoney(taxPayable)}
             </span>
           </div>
+
+          {calc?.isExemptUnder50k && (
+            <div className="pt-1 text-[10px] text-emerald-700 font-semibold">
+              ✓ Miễn nộp thêm (số thuế ≤ 50.000 VNĐ theo NĐ 126)
+            </div>
+          )}
         </div>
       </div>
 
@@ -121,7 +148,7 @@ export const TaxRefundBanner: React.FC = () => {
             </h4>
 
             <p className="text-[10px] text-slate-400 leading-tight">
-              {activeProfile?.routingLegalBasis || 'Xác định nơi nộp hồ sơ theo Nơi cư trú và làm việc (NĐ 126/2020/NĐ-CP)'}
+              {activeProfile?.routingLegalBasis || 'Xác định nơi nộp hồ sơ theo Nơi cư trú và làm việc (Nghị định 126/2020/NĐ-CP)'}
             </p>
           </div>
         </div>

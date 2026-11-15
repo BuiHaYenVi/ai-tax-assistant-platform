@@ -42,6 +42,8 @@ export class UserRepository {
         full_name AS "fullName",
         cccd,
         mst,
+        address,
+        TO_CHAR(date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
         role,
         status,
         is_vneid_verified AS "isVneidVerified",
@@ -108,6 +110,8 @@ export class UserRepository {
         full_name AS "fullName",
         cccd,
         mst,
+        address,
+        TO_CHAR(date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
         role,
         status,
         is_vneid_verified AS "isVneidVerified",
@@ -142,10 +146,25 @@ export class UserRepository {
       address?: string;
       taxDepartmentCode?: string;
       taxDepartmentName?: string;
+      cccd?: string;
+      idNumber?: string;
+      dateOfBirth?: string;
+      dob?: string;
+      mst?: string;
+      taxCode?: string;
     },
     client?: PoolClient
   ): Promise<AuthUserDto | null> {
     const runner = client || pool;
+    const cleanCccd = (data.cccd || data.idNumber || '').trim() || null;
+    const cleanMst = (data.mst || data.taxCode || '').trim() || null;
+    const cleanAddress = (data.address || '').trim() || null;
+    const cleanDob = (data.dateOfBirth || data.dob || '').trim() || null;
+    const cleanFullName = (data.fullName || '').trim() || null;
+    const cleanPhone = (data.phone || '').trim() || null;
+    const cleanDeptCode = (data.taxDepartmentCode || '').trim() || null;
+    const cleanDeptName = (data.taxDepartmentName || '').trim() || null;
+
     const queryText = `
       UPDATE users
       SET 
@@ -154,6 +173,9 @@ export class UserRepository {
         address = COALESCE($4, address),
         tax_department_code = COALESCE($5, tax_department_code),
         tax_department_name = COALESCE($6, tax_department_name),
+        cccd = COALESCE($7, cccd),
+        date_of_birth = COALESCE($8::date, date_of_birth),
+        mst = COALESCE($9, mst),
         updated_at = CLOCK_TIMESTAMP()
       WHERE id = $1
       RETURNING 
@@ -163,6 +185,8 @@ export class UserRepository {
         full_name AS "fullName",
         cccd,
         mst,
+        address,
+        TO_CHAR(date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
         role,
         status,
         is_vneid_verified AS "isVneidVerified",
@@ -175,15 +199,22 @@ export class UserRepository {
         last_login_at AS "lastLoginAt";
     `;
 
-    const result = await runner.query<AuthUserDto>(queryText, [
+    const params = [
       userId,
-      data.fullName || null,
-      data.phone || null,
-      data.address || null,
-      data.taxDepartmentCode || null,
-      data.taxDepartmentName || null,
-    ]);
+      cleanFullName,
+      cleanPhone,
+      cleanAddress,
+      cleanDeptCode,
+      cleanDeptName,
+      cleanCccd,
+      cleanDob,
+      cleanMst,
+    ];
 
+    console.log('[userRepository.updateProfile] Query:', queryText.replace(/\s+/g, ' ').trim());
+    console.log('[userRepository.updateProfile] Params:', params);
+
+    const result = await runner.query<AuthUserDto>(queryText, params);
     return result.rows[0] || null;
   }
 

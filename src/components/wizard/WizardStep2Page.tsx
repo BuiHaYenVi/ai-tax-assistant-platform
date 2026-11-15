@@ -1,22 +1,21 @@
 import React, { useState } from 'react';
 import { Plus, Wallet } from 'lucide-react';
 import { StepHeader } from './StepHeader';
-import { OcrUploader } from './OcrUploader';
-import { IncomeSalaryCard } from './IncomeSalaryCard';
-import { IncomeFreelanceCard } from './IncomeFreelanceCard';
+import { OcrUploader, type OcrExtractedResult } from './OcrUploader';
+import { IncomeSourceItemCard } from './IncomeSourceItemCard';
 import { RealtimeTaxSidebar } from './RealtimeTaxSidebar';
 import { WizardFooter } from './WizardFooter';
 import { 
   ViewScanModal, 
-  RuleEngineCheckModal 
+  RuleEngineCheckModal,
+  type ViewScanModalProps
 } from './WizardModals';
 import { RuleEngineScanningModal } from './RuleEngineScanningModal';
-import { IncomeFormModal } from '../modals/IncomeFormModal';
-import { initialWizardStep2Data } from '../../data/mockWizardStep2';
-import type { SalaryIncomeData, FreelanceIncomeData, RealtimeEstimateData } from '../../data/mockWizardStep2';
+import { IncomeFormModal, type IncomeFormData, type IncomeCategory } from '../modals/IncomeFormModal';
 
 import { useTaxFiling } from '../../contexts/TaxFilingContext';
-import type { IncomeFormData } from '../modals/IncomeFormModal';
+import { useToast } from '../../contexts/ToastContext';
+import type { IncomeSourceDto } from '../../types/business.types';
 
 interface WizardStep2PageProps {
   onBackToStep1?: () => void;
@@ -31,66 +30,199 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
   onBackToDashboard,
   onStepClick
 }) => {
-  const { activeProfile, incomeSources, addIncomeSource, executeAudit, createNewProfile } = useTaxFiling();
+  const { toast } = useToast();
+  const { 
+    activeProfile, 
+    incomeSources, 
+    addIncomeSource, 
+    updateIncomeSource, 
+    removeIncomeSource, 
+    executeAudit, 
+    createNewProfile 
+  } = useTaxFiling();
 
-  const [hasSalary, setHasSalary] = useState(true);
-  const [hasFreelance, setHasFreelance] = useState(true);
-  const [salaryData, setSalaryData] = useState<SalaryIncomeData>(initialWizardStep2Data.salaryIncome);
-  const [freelanceData, setFreelanceData] = useState<FreelanceIncomeData>(initialWizardStep2Data.freelanceIncome);
+  // Modal States
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [editingSource, setEditingSource] = useState<IncomeSourceDto | null>(null);
+  const [modalInitialData, setModalInitialData] = useState<Partial<IncomeFormData> | null>(null);
 
-  const financial = activeProfile?.financialSummary;
-  const totalIncome = financial?.totalTaxableIncome ?? (salaryData.totalTaxableIncome + freelanceData.totalIncomeBeforeTax);
-  const totalTax = financial?.taxWithheldTotal ?? (salaryData.taxWithheld + freelanceData.taxWithheld10Percent);
-
-  const [estimateData, setEstimateData] = useState<RealtimeEstimateData>(() => ({
-    ...initialWizardStep2Data.realtimeEstimate,
-    totalIncomeToDate: totalIncome,
-    totalTaxWithheldToDate: totalTax
-  }));
-
-  // Modals state
-  const [isAddManualOpen, setIsAddManualOpen] = useState(false);
+  // Scan modal & Rule Engine
   const [isViewScanOpen, setIsViewScanOpen] = useState(false);
+  const [scanModalProps, setScanModalProps] = useState<Partial<ViewScanModalProps>>({});
   const [isRuleEngineOpen, setIsRuleEngineOpen] = useState(false);
   const [isScanningRules, setIsScanningRules] = useState(false);
 
-  const incomeStreamsCount = incomeSources.length > 0 ? incomeSources.length : (hasSalary ? 1 : 0) + (hasFreelance ? 1 : 0);
-
-  // Recalculate totals when inputs change
-  const handleSalaryChange = (updated: SalaryIncomeData) => {
-    setSalaryData(updated);
-    setEstimateData(prev => ({
-      ...prev,
-      totalIncomeToDate: updated.totalTaxableIncome + (hasFreelance ? freelanceData.totalIncomeBeforeTax : 0),
-      totalTaxWithheldToDate: updated.taxWithheld + (hasFreelance ? freelanceData.taxWithheld10Percent : 0)
-    }));
+  // Mở modal thêm mới thủ công
+  const handleOpenAddManual = () => {
+    setEditingSource(null);
+    setModalInitialData(null);
+    setIsIncomeModalOpen(true);
   };
 
-  const handleFreelanceChange = (updated: FreelanceIncomeData) => {
-    setFreelanceData(updated);
-    setEstimateData(prev => ({
-      ...prev,
-      totalIncomeToDate: (hasSalary ? salaryData.totalTaxableIncome : 0) + updated.totalIncomeBeforeTax,
-      totalTaxWithheldToDate: (hasSalary ? salaryData.taxWithheld : 0) + updated.taxWithheld10Percent
-    }));
+  // Mở modal chỉnh sửa nguồn thu nhập hiện có
+  const handleOpenEdit = (source: IncomeSourceDto) => {
+    setEditingSource(source);
+    const category: IncomeCategory = source.category === 'salary_contract' 
+      ? 'labor' 
+      : source.category === 'freelance_10pct' 
+        ? 'freelance' 
+        : 'labor';
+
+    setModalInitialData({
+      id: source.id,
+      category,
+      companyName: source.payerName,
+      taxCode: source.payerMst,
+      totalIncome: Number(source.totalTaxableIncome || source.totalIncomeGross || 0),
+      taxWithheld: Number(source.taxWithheld || 0),
+      insuranceDeduction: Number(source.insuranceDeduction || 0),
+      applyPersonalDeduction: Boolean(source.applyPersonalDeduction),
+    });
+    setIsIncomeModalOpen(true);
   };
 
-  const handleDeleteSalary = () => {
-    setHasSalary(false);
+  // Xóa nguồn thu nhập khỏi cơ sở dữ liệu
+  const handleDeleteSource = async (id: string, payerName: string) => {
+    const isConfirmed = window.confirm(
+      `Bạn có chắc chắn muốn xóa nguồn thu nhập "${payerName}" khỏi cơ sở dữ liệu?`
+    );
+    if (!isConfirmed) return;
+
+    try {
+      await removeIncomeSource(id);
+      toast.success('✓ Đã xóa nguồn thu nhập thành công khỏi cơ sở dữ liệu.', payerName);
+    } catch (err: unknown) {
+      console.error('Lỗi khi xóa nguồn thu nhập:', err);
+      toast.error('Không thể xóa nguồn thu nhập.', 'Vui lòng kiểm tra lại kết nối.');
+    }
   };
 
-  const handleDeleteFreelance = () => {
-    setHasFreelance(false);
+  // Xem bản scan chứng từ
+  const handleViewScan = (source?: IncomeSourceDto) => {
+    if (source) {
+      setScanModalProps({
+        fileName: source.eCertificateCode ? `Chung_tu_${source.payerMst}.pdf` : 'Chung_Tu_Khau_Tru_2024.pdf',
+        payerName: source.payerName,
+        payerMst: source.payerMst,
+        grossIncome: Number(source.totalTaxableIncome || source.totalIncomeGross || 0),
+        taxWithheld: Number(source.taxWithheld || 0),
+      });
+    } else {
+      setScanModalProps({
+        fileName: 'Chung_Tu_Khau_Tru_2024.pdf',
+        payerName: 'Công ty Cổ phần Công nghệ ABC',
+        payerMst: '0312345678',
+        grossIncome: 180000000,
+        taxWithheld: 14200000,
+      });
+    }
+    setIsViewScanOpen(true);
   };
 
+  // Xử lý sau khi quét OCR chứng từ thành công
+  const handleOcrScanSuccess = (extracted: OcrExtractedResult) => {
+    toast.success(
+      '✓ Quét OCR chứng từ thành công!', 
+      `Bóc tách: ${extracted.companyName} (${new Intl.NumberFormat('vi-VN').format(extracted.totalIncome)} VNĐ)`
+    );
+
+    // Mở modal xác nhận với dữ liệu đã điền sẵn từ OCR
+    setEditingSource(null);
+    setModalInitialData({
+      category: 'labor',
+      companyName: extracted.companyName,
+      taxCode: extracted.taxCode,
+      totalIncome: extracted.totalIncome,
+      taxWithheld: extracted.taxWithheld,
+      insuranceDeduction: extracted.insuranceDeduction || Math.round(extracted.totalIncome * 0.105),
+      applyPersonalDeduction: true,
+    });
+    setScanModalProps({
+      fileName: extracted.fileName,
+      payerName: extracted.companyName,
+      payerMst: extracted.taxCode,
+      grossIncome: extracted.totalIncome,
+      taxWithheld: extracted.taxWithheld,
+    });
+    setIsIncomeModalOpen(true);
+  };
+
+  // Lưu thông tin nguồn thu nhập vào PostgreSQL
+  const handleSaveIncome = async (formData: IncomeFormData) => {
+    try {
+      let targetProfileId = activeProfile?.id;
+      if (!targetProfileId) {
+        const created = await createNewProfile(2025, '105', 'Cục Thuế TP Hồ Chí Minh');
+        targetProfileId = created.id;
+      }
+
+      const category = formData.category === 'labor' 
+        ? 'salary_contract' 
+        : formData.category === 'freelance' 
+          ? 'freelance_10pct' 
+          : 'other';
+
+      if (editingSource) {
+        // Cập nhật nguồn thu nhập có sẵn
+        await updateIncomeSource(editingSource.id, {
+          category,
+          payerName: formData.companyName,
+          payerMst: formData.taxCode,
+          totalIncomeGross: formData.totalIncome,
+          totalTaxableIncome: formData.totalIncome,
+          taxWithheld: formData.taxWithheld,
+          insuranceDeduction: formData.category === 'labor' ? (formData.insuranceDeduction || 0) : 0,
+          applyPersonalDeduction: formData.applyPersonalDeduction,
+        });
+
+        toast.success(
+          '✓ Đã cập nhật nguồn thu nhập thành công!',
+          `${formData.companyName} (${new Intl.NumberFormat('vi-VN').format(formData.totalIncome)} VNĐ)`
+        );
+      } else {
+        // Thêm nguồn thu nhập mới
+        await addIncomeSource({
+          profileId: targetProfileId,
+          category,
+          payerName: formData.companyName,
+          payerMst: formData.taxCode,
+          totalIncomeGross: formData.totalIncome,
+          totalTaxableIncome: formData.totalIncome,
+          taxWithheld: formData.taxWithheld,
+          insuranceDeduction: formData.category === 'labor' ? (formData.insuranceDeduction || 0) : 0,
+          applyPersonalDeduction: formData.applyPersonalDeduction,
+        });
+
+        toast.success(
+          '✓ Đã lưu nguồn thu nhập mới vào cơ sở dữ liệu!',
+          `${formData.companyName} (${new Intl.NumberFormat('vi-VN').format(formData.totalIncome)} VNĐ)`
+        );
+      }
+
+      setIsIncomeModalOpen(false);
+      setEditingSource(null);
+      setModalInitialData(null);
+    } catch (err: unknown) {
+      console.error('Lỗi lưu nguồn thu nhập:', err);
+      toast.error('Không thể lưu nguồn thu nhập.', 'Vui lòng kiểm tra lại thông tin.');
+    }
+  };
+
+  // Kích hoạt thẩm tra Rule Engine trước khi qua Bước 3
   const handleStartRuleEngineCheck = async () => {
+    if (incomeSources.length === 0) {
+      toast.error('Chưa có nguồn thu nhập nào', 'Vui lòng thêm ít nhất một nguồn thu nhập trước khi tiếp tục.');
+      return;
+    }
+
+    toast.success('✓ Bắt đầu thẩm tra Rule Engine và đối soát dữ liệu thuế.');
     setIsScanningRules(true);
     try {
       if (activeProfile?.id) {
         await executeAudit();
       }
     } catch (err: unknown) {
-      console.warn('Audit warning:', err);
+      console.warn('Cảnh báo Audit:', err);
     }
   };
 
@@ -101,37 +233,16 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
     }
   };
 
-  const handleSaveManualIncome = async (data: IncomeFormData) => {
-    try {
-      let targetProfileId = activeProfile?.id;
-      if (!targetProfileId) {
-        const created = await createNewProfile(2025, '105', 'Cục Thuế TP Hồ Chí Minh');
-        targetProfileId = created.id;
-      }
-
-      await addIncomeSource({
-        profileId: targetProfileId,
-        payerName: data.companyName,
-        payerMst: data.taxCode,
-        totalIncomeGross: data.totalIncome,
-        totalTaxableIncome: data.totalIncome,
-        taxWithheld: data.taxWithheld,
-        insuranceDeduction: data.insuranceDeduction || 0,
-      });
-
-      setIsAddManualOpen(false);
-    } catch (err: unknown) {
-      alert('Không thể lưu nguồn thu nhập.');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900 flex flex-col justify-between">
       <div>
-        {/* 1. Header with Top identification and 3-step Stepper */}
+        {/* 1. Header with Top identification and Stepper */}
         <StepHeader
           onLogoClick={onBackToDashboard}
-          onSaveDraft={onBackToDashboard}
+          onSaveDraft={() => {
+            toast.success('✓ Đã lưu nháp tiến độ quyết toán an toàn.');
+            if (onBackToDashboard) onBackToDashboard();
+          }}
           onHotlineClick={() => alert('Tổng đài hỗ trợ pháp lý TNCN: 1900 6868 (8:00 - 18:00)')}
           onStepClick={(step) => {
             if (step === 1 && onBackToStep1) onBackToStep1();
@@ -149,11 +260,8 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
             <div className="lg:col-span-8 space-y-4">
               {/* Smart OCR Upload Box */}
               <OcrUploader
-                onScanFile={(fileName) => {
-                  setHasSalary(true);
-                  alert(`Đã hoàn tất bóc tách tự động dữ liệu từ file: ${fileName}`);
-                }}
-                onViewScan={() => setIsViewScanOpen(true)}
+                onScanSuccess={handleOcrScanSuccess}
+                onViewScan={() => handleViewScan()}
                 onOpenMobileCamera={() => {
                   alert('Vui lòng quét mã QR trên màn hình bằng ứng dụng eTax Mobile');
                 }}
@@ -167,17 +275,17 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
                       Các nguồn thu nhập chịu thuế đã nhận
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Hệ thống tổng hợp và phân loại các hợp đồng tính lũy tiến và thu nhập khấu trừ vãng lai 10%.
+                      Hệ thống đồng bộ trực tiếp từ PostgreSQL và phân loại tự động HĐLĐ lũy tiến và vãng lai khấu trừ 10%.
                     </p>
                   </div>
 
                   <span className="bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold px-2.5 py-1 rounded-full shrink-0 self-start sm:self-center">
-                    {incomeStreamsCount} Nguồn thu nhập
+                    {incomeSources.length} Nguồn thu nhập
                   </span>
                 </div>
 
-                {/* Empty State or List of Cards */}
-                {incomeStreamsCount === 0 ? (
+                {/* Empty State or Dynamic List of Cards */}
+                {incomeSources.length === 0 ? (
                   <div className="py-12 px-6 border border-dashed border-slate-200 rounded-2xl bg-white shadow-2xs flex flex-col items-center justify-center text-center">
                     <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
                       <Wallet className="w-8 h-8 stroke-[1.5]" />
@@ -186,11 +294,11 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
                       Chưa có nguồn thu nhập nào được ghi nhận
                     </h4>
                     <p className="text-xs text-slate-500 max-w-sm mt-1 mb-5 leading-relaxed">
-                      Hãy thêm các nguồn thu nhập từ Hợp đồng lao động hoặc thu nhập vãng lai để hệ thống tính toán chi tiết.
+                      Hãy tải lên chứng từ khấu trừ thuế TNCN hoặc bấm thêm nguồn thu nhập từ Hợp đồng lao động, vãng lai để hệ thống tính toán chi tiết.
                     </p>
                     <button
                       type="button"
-                      onClick={() => setIsAddManualOpen(true)}
+                      onClick={handleOpenAddManual}
                       className="bg-[#046a4e] hover:bg-[#03543e] active:scale-[0.99] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
                     >
                       <Plus className="w-4 h-4" />
@@ -199,28 +307,21 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {/* Card 1: HĐLĐ Lũy tiến (Công ty Cổ phần Công nghệ ABC) */}
-                    {hasSalary && (
-                      <IncomeSalaryCard
-                        data={salaryData}
-                        onChange={handleSalaryChange}
-                        onDelete={handleDeleteSalary}
-                        onViewFile={() => setIsViewScanOpen(true)}
+                    {/* Render dynamic list of cards from PostgreSQL */}
+                    {incomeSources.map((source) => (
+                      <IncomeSourceItemCard
+                        key={source.id}
+                        source={source}
+                        onEdit={handleOpenEdit}
+                        onDelete={handleDeleteSource}
+                        onViewScan={() => handleViewScan(source)}
                       />
-                    )}
-
-                    {/* Card 2: Freelance Khấu trừ 10% */}
-                    {hasFreelance && (
-                      <IncomeFreelanceCard
-                        data={freelanceData}
-                        onChange={handleFreelanceChange}
-                        onDelete={handleDeleteFreelance}
-                      />
-                    )}
+                    ))}
 
                     {/* Add Manual Source Button */}
                     <button
-                      onClick={() => setIsAddManualOpen(true)}
+                      type="button"
+                      onClick={handleOpenAddManual}
                       className="w-full bg-white hover:bg-slate-50 border-2 border-dashed border-slate-200 hover:border-emerald-400 text-slate-700 hover:text-[#046a4e] text-xs font-semibold py-3 px-4 rounded-2xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Plus className="w-4 h-4 text-[#046a4e]" />
@@ -231,10 +332,9 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
               </div>
             </div>
 
-            {/* Right Column (~35% width) */}
+            {/* Right Column (~35% width): Realtime Tax Calculation from DB */}
             <div className="lg:col-span-4">
               <RealtimeTaxSidebar
-                data={estimateData}
                 onViewTaxFormula={() => setIsRuleEngineOpen(true)}
               />
             </div>
@@ -253,41 +353,20 @@ export const WizardStep2Page: React.FC<WizardStep2PageProps> = ({
 
       {/* Modals */}
       <IncomeFormModal
-        isOpen={isAddManualOpen}
-        onClose={() => setIsAddManualOpen(false)}
-        onSave={(data) => {
-          handleSaveManualIncome(data);
-          if (data.category === 'labor') {
-            setHasSalary(true);
-            setSalaryData(prev => ({
-              ...prev,
-              companyName: data.companyName,
-              totalTaxableIncome: data.totalIncome,
-              taxWithheld: data.taxWithheld,
-              insuranceDeduction: data.insuranceDeduction || prev.insuranceDeduction,
-            }));
-          } else {
-            setHasFreelance(true);
-            setFreelanceData(prev => ({
-              ...prev,
-              contractTitle: `Hợp đồng: ${data.companyName}`,
-              totalIncomeBeforeTax: data.totalIncome,
-              taxWithheld10Percent: data.taxWithheld,
-            }));
-          }
-          setEstimateData(prev => ({
-            ...prev,
-            totalIncomeToDate: prev.totalIncomeToDate + data.totalIncome,
-            totalTaxWithheldToDate: prev.totalTaxWithheldToDate + data.taxWithheld,
-          }));
-          alert(`Đã thêm nguồn thu nhập thành công: ${data.companyName} (${new Intl.NumberFormat('vi-VN').format(data.totalIncome)} VNĐ)`);
+        isOpen={isIncomeModalOpen}
+        onClose={() => {
+          setIsIncomeModalOpen(false);
+          setEditingSource(null);
+          setModalInitialData(null);
         }}
+        initialData={modalInitialData}
+        onSave={handleSaveIncome}
       />
 
       <ViewScanModal
         isOpen={isViewScanOpen}
         onClose={() => setIsViewScanOpen(false)}
-        fileName={initialWizardStep2Data.scannedFileName}
+        {...scanModalProps}
       />
 
       <RuleEngineCheckModal

@@ -12,11 +12,18 @@ import { validateLoginRequest } from '../middlewares/validation.middleware';
 const router = Router();
 
 /**
+ * @route   POST /api/auth/send-register-otp
+ * @desc    Gửi mã OTP xác thực email trước khi đăng ký
+ * @access  Public
+ */
+router.post('/send-register-otp', dbSessionMiddleware, authController.sendRegisterOtp);
+
+/**
  * @route   POST /api/auth/register
  * @desc    Đăng ký tài khoản người nộp thuế mới
  * @access  Public
  */
-router.post('/register', authController.register);
+router.post('/register', dbSessionMiddleware, authController.register);
 
 /**
  * @route   POST /api/auth/login
@@ -24,6 +31,13 @@ router.post('/register', authController.register);
  * @access  Public
  */
 router.post('/login', validateLoginRequest, authController.login);
+
+/**
+ * @route   POST /api/auth/refresh
+ * @desc    Cấp mới Access Token từ Refresh Token
+ * @access  Public
+ */
+router.post('/refresh', dbSessionMiddleware, authController.refreshToken);
 
 /**
  * @route   GET /api/auth/me

@@ -13,6 +13,7 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { ApiClientError } from '../types/api.types';
 import { storageUtil } from '../utils/storage.util';
 
@@ -29,8 +30,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onForgotPassword,
   onOpenGuide
 }) => {
+  const { toast } = useToast();
+
   // Form states
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem('thutra_registered_email') || '';
+    } catch {
+      return '';
+    }
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -47,6 +56,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
+    toast.success(msg);
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
     }, 3000);
@@ -61,7 +71,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     // Validation
     if (!email.trim()) {
-      setErrorMessage('Vui lòng nhập Email hoặc Tên đăng nhập');
+      setErrorMessage('Vui lòng nhập Địa chỉ Email');
       return;
     }
     if (!password) {
@@ -91,20 +101,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Autofill tài khoản mẫu demo nhanh
-  const handleQuickLogin = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMessage(null);
-  };
-
-  // Google sign in handler
-  const handleGoogleSignIn = async () => {
-    // Tự động liên kết qua tài khoản demo
-    handleQuickLogin('superadmin@thutra.vn', 'Admin@123456');
-    showToast('Đã nạp tài khoản Quản trị viên Super Admin!');
   };
 
   // Forgot password submit
@@ -217,47 +213,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             Lưu trữ hồ sơ tính toán và tra cứu lỗi quyết toán thuế TNCN của bạn
           </p>
 
-          {/* Nút đăng nhập nhanh Google */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50/90 hover:border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 transition duration-150 shadow-2xs cursor-pointer active:scale-[0.99] disabled:opacity-60"
-          >
-            {/* Google Multi-Color SVG Icon */}
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
-            </svg>
-            <span>Đăng nhập nhanh với Google</span>
-          </button>
-
-          {/* Đường phân cách (Divider) */}
-          <div className="relative my-5 text-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200/90" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-2.5 text-slate-400 font-normal select-none">
-                Hoặc đăng nhập bằng Email / Tên tài khoản
-              </span>
-            </div>
-          </div>
-
           {/* Thông báo lỗi nếu có */}
           {errorMessage && (
             <div className="mb-4 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-center gap-2">
@@ -268,27 +223,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           {/* Form Fields */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Trường 1: Email hoặc Tên tài khoản */}
+            {/* Trường 1: Địa chỉ Email */}
             <div>
               <label 
                 htmlFor="login-email" 
                 className="block text-xs font-semibold text-slate-700 mb-1.5"
               >
-                Email hoặc Tên đăng nhập
+                Địa chỉ Email
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   id="login-email"
-                  type="text"
+                  type="email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (errorMessage) setErrorMessage(null);
                   }}
-                  placeholder="vidu@gmail.com hoặc username"
+                  placeholder="vi-du@thutra.vn"
                   className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all placeholder:text-slate-400 text-slate-800"
                   autoComplete="username"
+                  required
                 />
               </div>
             </div>
@@ -393,31 +349,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               )}
             </button>
           </form>
-
-          {/* Quick Demo Credentials Bar */}
-          <div className="mt-4 p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-left">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-              Tài khoản thử nghiệm 1-click:
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('superadmin@thutra.vn', 'Admin@123456')}
-                className="text-[11px] px-2.5 py-1 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-slate-700 hover:text-emerald-800 font-medium transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>🛡️</span>
-                <span>Super Admin</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@thutra.vn', 'Admin@123456')}
-                className="text-[11px] px-2.5 py-1 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-slate-700 hover:text-emerald-800 font-medium transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>⚙️</span>
-                <span>Admin Manager</span>
-              </button>
-            </div>
-          </div>
 
           {/* Chuyển hướng Đăng ký */}
           <div className="mt-6 text-center text-xs text-slate-500">

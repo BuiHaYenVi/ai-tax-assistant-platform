@@ -7,6 +7,7 @@ import { TaxBreakdownCard } from '../components/dashboard/TaxBreakdownCard';
 import { IncomeFormModal } from '../components/modals/IncomeFormModal';
 import type { IncomeFormData } from '../components/modals/IncomeFormModal';
 import { useTaxFiling } from '../contexts/TaxFilingContext';
+import { useToast } from '../contexts/ToastContext';
 import { 
   MissingDocsModal, 
   DeductionDetailModal, 
@@ -20,6 +21,7 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
+  const { toast } = useToast();
   const { activeProfile, createNewProfile, addIncomeSource } = useTaxFiling();
   const [isAddIncomeOpen, setIsAddIncomeOpen] = useState(false);
   const [isMissingDocsOpen, setIsMissingDocsOpen] = useState(false);
@@ -57,13 +59,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       });
 
       setIsAddIncomeOpen(false);
+      toast.success('✓ Đã thêm nguồn thu nhập chịu thuế mới.', `${data.companyName} (${new Intl.NumberFormat('vi-VN').format(data.totalIncome)} VNĐ)`);
     } catch {
-      alert('Không thể lưu nguồn thu nhập. Vui lòng kiểm tra lại kết nối!');
+      toast.error('Không thể lưu nguồn thu nhập. Vui lòng kiểm tra lại kết nối!');
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Top Notification Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white border border-slate-200/90 rounded-2xl p-3 px-4 shadow-2xs text-xs text-slate-500">
         <button

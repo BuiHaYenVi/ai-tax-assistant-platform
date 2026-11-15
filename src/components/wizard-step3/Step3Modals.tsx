@@ -4,6 +4,8 @@ import {
   CheckCircle2, 
   AlertCircle 
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTaxFiling } from '../../contexts/TaxFilingContext';
 
 interface BaseModalProps {
   isOpen: boolean;
@@ -121,8 +123,15 @@ export const EtaxSubmissionModal: React.FC<{
   onClose,
   onCompleteToDashboard
 }) => {
+  const { user } = useAuth();
+  const { activeProfile, latestAuditResult } = useTaxFiling();
   const [step, setStep] = useState<'confirm' | 'otp' | 'success'>('confirm');
   const [otp, setOtp] = useState('');
+
+  const calc = latestAuditResult?.calculation;
+  const refundAmount = calc?.taxRefund ?? (activeProfile?.financialSummary?.taxBalance && activeProfile.financialSummary.taxBalance > 0 ? activeProfile.financialSummary.taxBalance : 0);
+  const payableAmount = calc?.taxPayable ?? (activeProfile?.financialSummary?.taxBalance && activeProfile.financialSummary.taxBalance < 0 ? Math.abs(activeProfile.financialSummary.taxBalance) : 0);
+  const formatMoney = (val: number) => `${new Intl.NumberFormat('vi-VN').format(Math.round(val))} VNĐ`;
 
   return (
     <Step3BaseModal isOpen={isOpen} onClose={onClose} title="Nộp tờ khai trực tiếp lên Cổng Thuế Điện Tử">
@@ -131,26 +140,34 @@ export const EtaxSubmissionModal: React.FC<{
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
             <p className="text-emerald-900 text-[11px] leading-relaxed">
-              Hồ sơ đã được kiểm tra hợp lệ 15/15 quy tắc và đủ điều kiện nhận hoàn thuế <strong>+4.850.000 VNĐ</strong> từ Kho Bạc Nhà Nước.
+              Hồ sơ đã được kiểm tra hợp lệ qua Bộ máy Rule Engine. {refundAmount > 0 ? (
+                <>Đủ điều kiện nhận hoàn thuế <strong>+{formatMoney(refundAmount)}</strong> từ Kho Bạc Nhà Nước.</>
+              ) : payableAmount > 0 ? (
+                <>Số thuế TNCN cần nộp thêm vào NSNN là <strong>{formatMoney(payableAmount)}</strong>.</>
+              ) : (
+                <>Nghĩa vụ thuế đã được cân bằng chính xác.</>
+              )}
             </p>
           </div>
 
           <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-1.5 text-[11px]">
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-500">Mẫu hồ sơ:</span>
-              <span className="font-bold text-slate-800">Tờ khai 02/QTT-TNCN (Kỳ 2026)</span>
+              <span className="font-bold text-slate-800">Tờ khai 02/QTT-TNCN (Kỳ {activeProfile?.taxYear || 2025})</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-500">Người nộp thuế:</span>
-              <span className="font-bold text-slate-800">Nguyễn Hoàng Nam (MST: 8492019381)</span>
+              <span className="font-bold text-slate-800">{user?.fullName || 'Người nộp thuế'} (MST: {user?.mst || 'Chưa cập nhật'})</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-500">Cơ quan thuế tiếp nhận:</span>
-              <span className="font-bold text-slate-800">Chi cục Thuế Quận Bình Thạnh, TP.HCM</span>
+              <span className="font-bold text-slate-800">{activeProfile?.taxDepartmentName || user?.taxDepartmentName || 'Cục Thuế TP Hồ Chí Minh'}</span>
             </div>
-            <div className="flex justify-between py-1 text-emerald-800 font-bold">
-              <span>Số thuế được hoàn trả:</span>
-              <span>+4.850.000 VNĐ</span>
+            <div className="flex justify-between py-1 font-bold">
+              <span className="text-slate-600">Nghĩa vụ chênh lệch:</span>
+              <span className={refundAmount > 0 ? 'text-emerald-800' : payableAmount > 0 ? 'text-rose-700' : 'text-slate-800'}>
+                {refundAmount > 0 ? `+${formatMoney(refundAmount)} (Hoàn trả)` : payableAmount > 0 ? `-${formatMoney(payableAmount)} (Nộp thêm)` : '0 VNĐ'}
+              </span>
             </div>
           </div>
 

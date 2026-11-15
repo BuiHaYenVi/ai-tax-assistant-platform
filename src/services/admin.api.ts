@@ -64,6 +64,44 @@ export const adminApi = {
       params: query,
     });
   },
+
+  /**
+   * ============================================================================
+   * PHÂN HỆ KHO TRI THỨC PHÁP LÝ RAG (RAG KNOWLEDGE BASE)
+   * ============================================================================
+   */
+
+  /**
+   * Lấy danh mục văn bản trong kho tri thức RAG kèm số lượng chunks
+   * GET /admin/rag/documents
+   */
+  async getRagDocuments(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/admin/rag/documents');
+  },
+
+  /**
+   * Tải lên tài liệu pháp luật (PDF, Word, Text) để bóc tách, chia chunk và sinh vector
+   * POST /admin/rag/documents/upload
+   */
+  async uploadRagDocument(formData: FormData): Promise<ApiResponse<any>> {
+    return apiClient.upload<any>('/admin/rag/documents/upload', formData);
+  },
+
+  /**
+   * Xóa văn bản pháp luật và các vector chunks liên quan
+   * DELETE /admin/rag/documents/:id
+   */
+  async deleteRagDocument(id: string): Promise<ApiResponse<any>> {
+    return apiClient.delete<any>(`/admin/rag/documents/${id}`);
+  },
+
+  /**
+   * Thử nghiệm truy vấn vector ngữ nghĩa (Semantic Search Tester)
+   * POST /admin/rag/query
+   */
+  async queryRag(query: string): Promise<ApiResponse<any[]>> {
+    return apiClient.post<any[]>('/admin/rag/query', { query });
+  },
 };
 
 export default adminApi;

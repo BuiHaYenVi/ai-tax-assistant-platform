@@ -21,8 +21,10 @@ export interface AuthContextType {
   error: string | null;
   login: (credentials: LoginRequestDto) => Promise<void>;
   register: (payload: RegisterRequestDto) => Promise<void>;
+  sendRegisterOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   updateUserProfile: (payload: UpdateUserProfileDto) => Promise<void>;
   clearError: () => void;
 }
@@ -169,6 +171,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   /**
+   * Yêu cầu gửi mã OTP xác thực email trước khi đăng ký
+   */
+  const sendRegisterOtp = useCallback(async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authApi.sendRegisterOtp({ email: email.trim() });
+    } catch (err: unknown) {
+      const clientErr = ApiClientError.fromError(err);
+      setError(clientErr.message);
+      throw clientErr;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
    * Đăng xuất người dùng và dọn dẹp sạch toàn bộ phiên
    */
   const logout = useCallback(async () => {
@@ -244,8 +263,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error,
     login,
     register,
+    sendRegisterOtp,
     logout,
     refreshProfile,
+    refreshUser: refreshProfile,
     updateUserProfile,
     clearError,
   }), [
@@ -255,6 +276,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error,
     login,
     register,
+    sendRegisterOtp,
     logout,
     refreshProfile,
     updateUserProfile,

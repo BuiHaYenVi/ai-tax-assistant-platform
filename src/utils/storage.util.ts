@@ -92,29 +92,50 @@ export const storageUtil = {
   // QUẢN LÝ ACCESS TOKEN & REFRESH TOKEN
   // ----------------------------------------------------------------------------
   getAccessToken(): string | null {
-    return getItem(StorageKeys.ACCESS_TOKEN);
+    return getItem(StorageKeys.ACCESS_TOKEN) ||
+           getItem('accessToken') ||
+           getItem('token') ||
+           getItem('auth_token') ||
+           getItem('jwt') ||
+           getItem('jwt_token') ||
+           getItem('access_token');
   },
 
   setAccessToken(token: string): void {
     if (!token) return;
-    setItem(StorageKeys.ACCESS_TOKEN, token.trim());
+    const clean = token.replace(/^Bearer\s+/i, '').trim();
+    setItem(StorageKeys.ACCESS_TOKEN, clean);
+    setItem('accessToken', clean);
+    setItem('token', clean);
   },
 
   removeAccessToken(): void {
     removeItem(StorageKeys.ACCESS_TOKEN);
+    removeItem('accessToken');
+    removeItem('token');
+    removeItem('auth_token');
+    removeItem('jwt');
+    removeItem('jwt_token');
+    removeItem('access_token');
   },
 
   getRefreshToken(): string | null {
-    return getItem(StorageKeys.REFRESH_TOKEN);
+    return getItem(StorageKeys.REFRESH_TOKEN) ||
+           getItem('refreshToken') ||
+           getItem('refresh_token');
   },
 
   setRefreshToken(token: string): void {
     if (!token) return;
-    setItem(StorageKeys.REFRESH_TOKEN, token.trim());
+    const clean = token.replace(/^Bearer\s+/i, '').trim();
+    setItem(StorageKeys.REFRESH_TOKEN, clean);
+    setItem('refreshToken', clean);
   },
 
   removeRefreshToken(): void {
     removeItem(StorageKeys.REFRESH_TOKEN);
+    removeItem('refreshToken');
+    removeItem('refresh_token');
   },
 
   setTokens(tokens: AuthTokens): void {
@@ -188,6 +209,8 @@ export const storageUtil = {
     this.removeRefreshToken();
     this.removeUserProfile();
     this.removeActiveProfileId();
+    removeItem('thutra_user_profile');
+    removeItem('thutra_bank_info');
   },
 
   /**

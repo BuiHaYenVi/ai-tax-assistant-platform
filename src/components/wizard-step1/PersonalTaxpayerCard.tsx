@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, ShieldCheck } from 'lucide-react';
+import { User, ShieldCheck, Lock } from 'lucide-react';
 import type { PersonalTaxpayer } from '../../data/mockWizardStep1';
 
 interface PersonalTaxpayerCardProps {
@@ -9,19 +9,26 @@ interface PersonalTaxpayerCardProps {
 
 export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
   taxpayer,
-  onChangeTaxpayer
 }) => {
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
       {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+        <div className="flex items-start gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
             <User className="w-4 h-4" />
           </div>
-          <h3 className="font-extrabold text-slate-900 text-sm tracking-tight">
-            1. Thông tin Người nộp thuế (Bản thân)
-          </h3>
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
+              <span>1. Thông tin Người nộp thuế (Bản thân)</span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock className="w-2.5 h-2.5" /> Khóa bảo vệ
+              </span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Thông tin được đồng bộ tự động từ VNeID &amp; Hồ sơ tài khoản. Để thay đổi, vui lòng cập nhật tại mục <span className="font-medium text-blue-600">Cài đặt tài khoản</span>.
+            </p>
+          </div>
         </div>
 
         <span className="bg-emerald-50 text-[#046a4e] border border-emerald-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shrink-0 self-start sm:self-center">
@@ -40,8 +47,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="text"
             value={taxpayer.fullName}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('fullName', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
 
@@ -53,8 +61,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="text"
             value={taxpayer.cccd}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('cccd', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-mono font-bold cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
 
@@ -66,8 +75,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="text"
             value={taxpayer.mst}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('mst', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-mono font-bold cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
 
@@ -79,8 +89,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="text"
             value={taxpayer.phone}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('phone', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
 
@@ -92,8 +103,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="email"
             value={taxpayer.email}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('email', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
 
@@ -105,8 +117,9 @@ export const PersonalTaxpayerCard: React.FC<PersonalTaxpayerCardProps> = ({
           <input
             type="text"
             value={taxpayer.address}
-            onChange={(e) => onChangeTaxpayer && onChangeTaxpayer('address', e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] outline-none transition-all"
+            readOnly={true}
+            disabled={true}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium cursor-not-allowed select-none focus:outline-none focus:ring-0 focus:border-slate-200 transition-all"
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Step3Header } from './Step3Header';
 import { TaxRefundBanner } from './TaxRefundBanner';
 import { RuleEngineWarnings } from './RuleEngineWarnings';
@@ -6,7 +6,9 @@ import { AiTaxOptimizationCard } from './AiTaxOptimizationCard';
 import { ExportXmlSection } from './ExportXmlSection';
 import { TaxSummarySidebar } from './TaxSummarySidebar';
 import { Step3Footer } from './Step3Footer';
+import { useAuth } from '../../contexts/AuthContext';
 import { useTaxFiling } from '../../contexts/TaxFilingContext';
+import { useToast } from '../../contexts/ToastContext';
 import { 
   AddDependentMstModal, 
   EtaxSubmissionModal, 
@@ -27,20 +29,47 @@ export const WizardStep3Page: React.FC<WizardStep3PageProps> = ({
   onBackToDashboard,
   onStepClick
 }) => {
-  const { activeProfile, executeAudit } = useTaxFiling();
+  const { user } = useAuth();
+  const { toast, clearAllToasts } = useToast();
+  const { activeProfile, latestAuditResult, executeAudit } = useTaxFiling();
   const [isAddMstOpen, setIsAddMstOpen] = useState(false);
   const [isEtaxSubmitOpen, setIsEtaxSubmitOpen] = useState(false);
   const [isTaxSubmissionOpen, setIsTaxSubmissionOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
-  // Tự động kích hoạt kiểm tra 15 rules từ Backend
+  // Cờ ref lưu trữ profileId đã hoàn tất audit để chặn lặp vô hạn và chống React 18 Strict Mode
+  const hasAuditedRef = useRef<string | null>(null);
+  const profileId = activeProfile?.id;
+
+  // Tự động kích hoạt kiểm tra 15 rules từ Backend (chạy DUY NHẤT 1 LẦN cho mỗi profileId)
   useEffect(() => {
-    if (activeProfile?.id) {
-      executeAudit().catch((err: unknown) => {
+    if (!profileId || hasAuditedRef.current === profileId) {
+      return;
+    }
+
+    hasAuditedRef.current = profileId;
+
+    executeAudit()
+      .then((res) => {
+        clearAllToasts();
+        if (res.findings && res.findings.length > 0) {
+          toast.info(
+            `✓ Thẩm tra hoàn tất: Ghi nhận ${res.findings.length} điểm lưu ý cần rà soát.`,
+            undefined,
+            3000
+          );
+        } else {
+          toast.success(
+            '✓ Thẩm tra hoàn tất: Hồ sơ hợp lệ 15/15 rules, đủ điều kiện hoàn thuế!',
+            undefined,
+            3000
+          );
+        }
+      })
+      .catch((err: unknown) => {
         console.warn('Lỗi khi kích hoạt thẩm tra 15 rules:', err);
       });
-    }
-  }, [activeProfile?.id, executeAudit]);
+  }, [profileId]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900 flex flex-col justify-between">
@@ -82,13 +111,16 @@ export const WizardStep3Page: React.FC<WizardStep3PageProps> = ({
 
               {/* Part 4: Export XML & Express Submission Guide */}
               <ExportXmlSection
-                onDownloadXml={() => setIsTaxSubmissionOpen(true)}
+                onDownloadXml={() => {
+                  toast.success('✓ Xuất tờ khai 02/QTT-TNCN chuẩn XML thành công! Sẵn sàng nộp Tổng cục Thuế.');
+                  setIsTaxSubmissionOpen(true);
+                }}
                 onWatchVideoGuide={() => setIsTaxSubmissionOpen(true)}
                 onDownloadSchedule={() => {
-                  alert('Đang tải Tờ Bảng kê chi tiết 02-1/BK-TNCN...');
+                  toast.info('Đang tải Tờ Bảng kê chi tiết 02-1/BK-TNCN...');
                 }}
                 onDownloadPdfReport={() => {
-                  alert('Đang tải Phiếu tổng hợp số liệu giải trình quyết toán thuế PDF...');
+                  toast.info('Đang tải Phiếu tổng hợp số liệu giải trình quyết toán thuế PDF...');
                 }}
               />
             </div>
@@ -122,16 +154,16 @@ export const WizardStep3Page: React.FC<WizardStep3PageProps> = ({
       <TaxSubmissionModal
         isOpen={isTaxSubmissionOpen}
         onClose={() => setIsTaxSubmissionOpen(false)}
-        taxOffice="Chi cục Thuế Q. Bình Thạnh"
-        fileName="to-khai-02-QTT-TNCN-2024-8492019381.xml"
+        taxOffice={activeProfile?.taxDepartmentName || user?.taxDepartmentName || 'Cục Thuế TP Hồ Chí Minh'}
+        fileName={`to-khai-02-QTT-TNCN-${activeProfile?.taxYear || 2025}-${user?.mst || '8492019482'}.xml`}
       />
 
       <TaxSettlementSuccessModal
         isOpen={isSuccessModalOpen}
         onClose={() => setIsSuccessModalOpen(false)}
-        settlementId="TT-2026-8492019381-QTT"
-        refundAmount={18450000}
-        taxOffice="Chi cục Thuế Quận Bình Thạnh, TP.HCM"
+        settlementId={`TT-${activeProfile?.taxYear || 2025}-${user?.mst || '8492019482'}-QTT`}
+        refundAmount={latestAuditResult?.calculation?.taxRefund ?? (activeProfile?.financialSummary?.taxBalance && activeProfile.financialSummary.taxBalance > 0 ? activeProfile.financialSummary.taxBalance : 0)}
+        taxOffice={activeProfile?.taxDepartmentName || user?.taxDepartmentName || 'Cục Thuế TP Hồ Chí Minh'}
         onDownloadPdf={() => alert('Đang tải bản tổng hợp giải trình quyết toán thuế (PDF)...')}
         onGoToDashboard={onBackToDashboard}
       />

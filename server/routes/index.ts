@@ -13,6 +13,7 @@ import { dependentRouter } from './dependent.routes';
 import { userRouter } from './user.routes';
 import { settingRouter } from './setting.routes';
 import { adminRouter } from './admin.routes';
+import chatRouter from './chat.routes';
 import type { ApiResponse } from '../types/api.types';
 
 const router = Router();
@@ -44,5 +45,6 @@ router.use('/dependents', dependentRouter);
 router.use('/users', userRouter);
 router.use('/settings', settingRouter);
 router.use('/admin', adminRouter);
+router.use('/chat', chatRouter);
 
 export const mainApiRouter = router;

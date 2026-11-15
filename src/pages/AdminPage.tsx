@@ -22,7 +22,9 @@ import {
   X,
   Save,
   Check,
-  Info
+  Info,
+  Trash2,
+  Upload
 } from 'lucide-react';
 import type {
   AdminRule,
@@ -33,7 +35,6 @@ import {
   initialAdminRules,
   defaultTaxParameters,
   progressiveTaxBrackets,
-  mockRagDocuments,
   mockMaskedAuditLogs
 } from '../data/mockAdminRules';
 import { adminApi } from '../services/admin.api';
@@ -86,7 +87,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
   const [immutableAuditLog, setImmutableAuditLog] = useState<boolean>(true);
   const [serverAuditLogs, setServerAuditLogs] = useState<AuditLogItemDto[]>([]);
 
-  // 6. RAG Knowledge Query Sandbox State
+  // 6. RAG Knowledge & Legal Documents State
+  const [legalDocuments, setLegalDocuments] = useState<any[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState<boolean>(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState<boolean>(false);
   const [ragQuery, setRagQuery] = useState('Người phụ thuộc trên 18 tuổi đang theo học đại học cần hồ sơ chứng minh gì?');
   const [ragQueryResult, setRagQueryResult] = useState<string | null>(null);
   const [isQueryingRag, setIsQueryingRag] = useState(false);
@@ -196,6 +200,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
         }
       } catch (err: unknown) {
         console.warn('Lỗi khi nạp audit logs từ backend:', err);
+      }
+
+      try {
+        const ragRes = await adminApi.getRagDocuments();
+        if (isMounted && ragRes.data) {
+          setLegalDocuments(ragRes.data);
+        }
+      } catch (err: unknown) {
+        console.warn('Lỗi khi nạp RAG documents:', err);
       }
     };
 
@@ -321,18 +334,100 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
     }, 400);
   };
 
-  // RAG Semantic Query simulation
-  const handleRunRagQuery = () => {
+  // Nạp lại danh sách tài liệu RAG
+  const fetchRagDocuments = async () => {
+    setIsLoadingDocs(true);
+    try {
+      const ragRes = await adminApi.getRagDocuments();
+      if (ragRes.data) {
+        setLegalDocuments(ragRes.data);
+      }
+    } catch (err: unknown) {
+      console.warn('Lỗi khi tải danh sách RAG:', err);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  };
+
+  // Upload tài liệu pháp quy mới
+  const handleUploadRagFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size === 0) {
+      alert(`Tệp "${file.name}" đang bị rỗng (0 bytes). Vui lòng điền nội dung văn bản trước khi tải lên.`);
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    showToast(`Đang tải lên và sinh vector embedding cho: ${file.name}...`);
+
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      const codeSuggestion = file.name.replace(/\.[^/.]+$/, '').toUpperCase();
+      formData.append('code', codeSuggestion);
+      formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+      formData.append('category', 'Văn bản quy phạm pháp luật');
+
+      const res = await adminApi.uploadRagDocument(formData);
+      if (res.success) {
+        showToast(`✓ Đã nạp thành công "${file.name}" (${res.data?.chunksCount || 1} chunks vector)!`);
+        await fetchRagDocuments();
+      } else {
+        alert(res.message || 'Không thể tải lên tài liệu.');
+      }
+    } catch (err: any) {
+      console.error('Lỗi upload tài liệu RAG:', err);
+      alert(err.message || 'Lỗi khi tải lên tài liệu.');
+    } finally {
+      setIsUploadingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  // Xóa tài liệu khỏi kho RAG
+  const handleDeleteDocument = async (id: string, title: string) => {
+    const confirmed = window.confirm(`Bạn có chắc chắn muốn xóa văn bản "${title}" và toàn bộ vector liên quan khỏi kho tri thức RAG?`);
+    if (!confirmed) return;
+
+    try {
+      await adminApi.deleteRagDocument(id);
+      showToast(`✓ Đã xóa văn bản "${title}" khỏi kho RAG.`);
+      await fetchRagDocuments();
+    } catch (err: any) {
+      console.error('Lỗi xóa văn bản RAG:', err);
+      alert(err.message || 'Không thể xóa văn bản.');
+    }
+  };
+
+  // RAG Semantic Query trực tiếp từ backend vector chunks
+  const handleRunRagQuery = async () => {
+    if (!ragQuery.trim()) return;
     setIsQueryingRag(true);
-    setTimeout(() => {
+    try {
+      const res = await adminApi.queryRag(ragQuery.trim());
+      if (res.data && res.data.length > 0) {
+        const topMatch = res.data[0];
+        const lines = [
+          `• Căn cứ: ${topMatch.documentCode} (${topMatch.documentTitle})`,
+          `• Độ tương đồng Cosine: ${(topMatch.similarity * 100).toFixed(1)}% (Gemini Embedding 768 chiều)`,
+          `• Nội dung trích dẫn:\n"${topMatch.content}"`
+        ];
+        if (res.data.length > 1) {
+          lines.push(`\n[Tìm thấy thêm ${res.data.length - 1} phân đoạn liên quan khác trong kho tri thức]`);
+        }
+        setRagQueryResult(lines.join('\n'));
+      } else {
+        setRagQueryResult('Không tìm thấy đoạn trích dẫn nào có độ tương đồng đủ cao trong kho tri thức hiện tại.');
+      }
+    } catch (err: any) {
+      console.warn('Lỗi khi truy vấn vector RAG:', err);
+      setRagQueryResult('Đã xảy ra lỗi khi kết nối truy vấn vector ngữ nghĩa.');
+    } finally {
       setIsQueryingRag(false);
-      setRagQueryResult(
-        'Căn cứ Tiết d.1.2 Điểm d Khoản 1 Điều 9 Thông tư 111/2013/TT-BTC:\n' +
-        '• Con từ 18 tuổi trở lên đang theo học tại các trường đại học, cao đẳng, trung cấp chuyên nghiệp, dạy nghề (kể cả du học) có thu nhập bình quân tháng trong năm không quá 1.000.000 đồng.\n' +
-        '• Hồ sơ chứng minh: Bản chụp CCCD/CMND của con + Bản sao Thẻ sinh viên hoặc Giấy xác nhận của nhà trường hoặc bản sao chứng từ nộp học phí.\n' +
-        '• Tương đồng ngữ nghĩa vector: 0.948 (text-embedding-3 / pgvector top-1 match).'
-      );
-    }, 700);
+    }
   };
 
   // Calculate simulated tax with dynamic parameters
@@ -615,7 +710,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
           <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${
             activeTab === 'knowledge' ? 'bg-emerald-800/80 text-emerald-100' : 'bg-slate-100 text-slate-600'
           }`}>
-            148
+            {legalDocuments.length}
           </span>
         </button>
 
@@ -1244,73 +1339,138 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  showToast('Đang quét và đồng bộ lại 148 chunks văn bản pháp luật...');
-                }}
-                className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
-                <span>Re-index Vector Embeddings</span>
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={fetchRagDocuments}
+                  disabled={isLoadingDocs}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Tải lại danh sách văn bản từ máy chủ"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoadingDocs ? 'animate-spin' : ''}`} />
+                  <span>Làm mới</span>
+                </button>
+
+                <label className="bg-[#046a4e] hover:bg-[#03543e] text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-xs">
+                  <Upload className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>{isUploadingDoc ? 'Đang nạp...' : '+ Thêm tài liệu mới'}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt"
+                    onChange={handleUploadRagFile}
+                    disabled={isUploadingDoc}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
             {/* 3 Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
               <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4">
                 <span className="text-slate-400 text-xs">Vector Database Engine:</span>
-                <h4 className="text-sm font-bold text-slate-800 mt-1">PostgreSQL pgvector</h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">HNSW index (Cosine distance)</p>
+                <h4 className="text-sm font-bold text-slate-800 mt-1">PostgreSQL Vector Store</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">Mảng Float8[] 768 chiều (Cosine distance)</p>
               </div>
 
               <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4">
                 <span className="text-slate-400 text-xs">Embedding Model:</span>
-                <h4 className="text-sm font-bold text-slate-800 mt-1">text-embedding-3-small</h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">1536 chiều, chunk size 512 tokens</p>
+                <h4 className="text-sm font-bold text-slate-800 mt-1">Gemini gemini-embedding-001</h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">768 chiều, chunk size 300-500 từ</p>
               </div>
 
               <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4">
-                <span className="text-slate-400 text-xs">Điểm Cosine trung bình:</span>
-                <h4 className="text-sm font-bold text-[#046a4e] mt-1">0.932 / 1.000</h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">Độ chính xác truy xuất cao</p>
+                <span className="text-slate-400 text-xs">Tổng số Chunks trong kho:</span>
+                <h4 className="text-sm font-bold text-[#046a4e] mt-1">
+                  {legalDocuments.reduce((s, d) => s + Number(d.chunks_count || d.chunksCount || 0), 0)} Chunks
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">Từ {legalDocuments.length} văn bản quy phạm pháp luật</p>
               </div>
             </div>
 
             {/* Danh sách Văn bản Pháp lý đã Nạp */}
             <div className="mt-6">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                Danh mục Văn bản Nguồn trong Vector Store ({mockRagDocuments.length} văn bản)
-              </h3>
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                {mockRagDocuments.map((doc) => (
-                  <div key={doc.id} className="p-4 bg-white hover:bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded text-[11px]">
-                          {doc.code}
-                        </span>
-                        <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                          {doc.category}
-                        </span>
-                      </div>
-                      <p className="font-semibold text-slate-900">
-                        {doc.title}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4 shrink-0 text-slate-500 text-[11px]">
-                      <span className="font-medium">
-                        <strong>{doc.chunksCount}</strong> Chunks
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">
-                        <Check className="w-3 h-3" />
-                        <span>Ready</span>
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Danh mục Văn bản Nguồn trong Vector Store ({legalDocuments.length} văn bản)
+                </h3>
+                {isLoadingDocs && (
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Đang đồng bộ...
+                  </span>
+                )}
               </div>
+
+              {isLoadingDocs && legalDocuments.length === 0 ? (
+                <div className="py-10 text-center text-xs text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-600" />
+                  <span>Đang tải danh mục văn bản từ máy chủ...</span>
+                </div>
+              ) : legalDocuments.length === 0 ? (
+                <div className="py-10 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  <Database className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <h4 className="font-bold text-slate-700 text-xs">Chưa có văn bản pháp luật nào trong kho tri thức</h4>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto mt-1 mb-4 leading-relaxed">
+                    Hãy bấm nút bên dưới để tải lên tệp PDF, Word hoặc Text (Thông tư, Nghị định, Công văn thuế) để hệ thống tự động bóc tách và sinh vector.
+                  </p>
+                  <label className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#046a4e] hover:bg-[#03543e] text-white text-xs font-semibold rounded-xl cursor-pointer shadow-xs">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Tải lên văn bản đầu tiên</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt"
+                      onChange={handleUploadRagFile}
+                      disabled={isUploadingDoc}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                  {legalDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="p-4 bg-white hover:bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded text-[11px]">
+                            {doc.code}
+                          </span>
+                          <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                            {doc.category || 'Thông tư Bộ Tài Chính'}
+                          </span>
+                          {doc.last_embedded_at && (
+                            <span className="text-[10px] text-slate-400">
+                              • Nạp lúc: {new Date(doc.last_embedded_at).toLocaleDateString('vi-VN')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-semibold text-slate-900">{doc.title}</p>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0 text-slate-500 text-[11px]">
+                        <span className="font-medium bg-slate-100 px-2 py-0.5 rounded-lg">
+                          <strong className="text-purple-700">{doc.chunks_count || doc.chunksCount || 0}</strong> Chunks
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">
+                          <Check className="w-3 h-3" />
+                          <span>{doc.vector_status || 'Ready'}</span>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDocument(doc.id, doc.title)}
+                          title="Xóa văn bản khỏi kho RAG"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer ml-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1323,7 +1483,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate }) => {
                   Công cụ Thử nghiệm Truy vấn Ngữ nghĩa (Semantic Search Tester)
                 </h3>
               </div>
-              <span className="text-[11px] text-slate-400">pgvector Top-K RAG</span>
+              <span className="text-[11px] text-slate-400 font-mono">Gemini Vector Top-K RAG</span>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">

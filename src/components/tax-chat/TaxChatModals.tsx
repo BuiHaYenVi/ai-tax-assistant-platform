@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { mockSynchronizedProfile, mockLegalDocuments } from '../../data/mockChatData';
 import type { LegalDocument } from '../../data/mockChatData';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Base Modal Wrapper
 export const BaseModal: React.FC<{
@@ -47,6 +48,7 @@ export const ExportPdfModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
   isOpen,
   onClose
 }) => {
+  const { user } = useAuth();
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} title="Phiếu Tư Vấn Pháp Lý Quyết Toán Thuế TNCN (PDF)">
       <div className="space-y-4 text-xs text-slate-700">
@@ -77,11 +79,11 @@ export const ExportPdfModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
           <div className="bg-white border border-slate-200/90 rounded-lg p-3 grid grid-cols-2 gap-2 text-[11px]">
             <div>
               <span className="text-slate-500">Người nộp thuế: </span>
-              <strong className="font-bold text-slate-900">{mockSynchronizedProfile.taxpayerName}</strong>
+              <strong className="font-bold text-slate-900">{user?.fullName || mockSynchronizedProfile.taxpayerName}</strong>
             </div>
             <div>
               <span className="text-slate-500">Mã số thuế: </span>
-              <strong className="font-bold font-mono text-slate-900">{mockSynchronizedProfile.mst}</strong>
+              <strong className="font-bold font-mono text-slate-900">{user?.mst || mockSynchronizedProfile.mst}</strong>
             </div>
             <div>
               <span className="text-slate-500">Kỳ tính thuế: </span>

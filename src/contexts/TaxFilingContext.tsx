@@ -3,7 +3,7 @@
 // Hệ thống: ThuTra TNCN - Tầng 3: State Management Layer
 // ==============================================================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { profileApi } from '../services/profile.api';
 import { taxDeclarationApi } from '../services/tax-declaration.api';
 import { documentApi } from '../services/document.api';
@@ -73,6 +73,11 @@ export const TaxFilingProvider: React.FC<TaxFilingProviderProps> = ({ children }
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const [activeProfile, setActiveProfile] = useState<TaxProfileDto | null>(null);
+  const activeProfileRef = useRef<TaxProfileDto | null>(null);
+  useEffect(() => {
+    activeProfileRef.current = activeProfile;
+  }, [activeProfile]);
+
   const [profilesList, setProfilesList] = useState<TaxProfileDto[]>([]);
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDto[]>([]);
   const [dependents, setDependents] = useState<DependentDto[]>([]);
@@ -462,11 +467,12 @@ export const TaxFilingProvider: React.FC<TaxFilingProviderProps> = ({ children }
    * Kích hoạt chạy toàn bộ Động cơ Thẩm tra 15 Rules (R01 - R15)
    */
   const executeAudit = useCallback(async (): Promise<AuditRunResultDto> => {
-    if (!activeProfile) throw new Error('Không có kỳ quyết toán nào đang được chọn để thẩm tra.');
+    const profId = activeProfileRef.current?.id;
+    if (!profId) throw new Error('Không có kỳ quyết toán nào đang được chọn để thẩm tra.');
     setIsFilingLoading(true);
     setFilingError(null);
     try {
-      const res = await auditApi.runAudit(activeProfile.id);
+      const res = await auditApi.runAudit(profId);
       if (res.success && res.data) {
         setLatestAuditResult(res.data);
         await refreshActiveProfileData();
@@ -480,7 +486,7 @@ export const TaxFilingProvider: React.FC<TaxFilingProviderProps> = ({ children }
     } finally {
       setIsFilingLoading(false);
     }
-  }, [activeProfile, refreshActiveProfileData]);
+  }, [refreshActiveProfileData]);
 
   const clearFilingError = useCallback(() => {
     setFilingError(null);

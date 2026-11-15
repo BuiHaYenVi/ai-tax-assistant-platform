@@ -1,16 +1,12 @@
 import React from 'react';
 import { 
-  FileText, 
-  Calendar, 
-  ShieldCheck, 
   Headphones, 
   Bookmark, 
   Check, 
-  FileSpreadsheet, 
+  FileSpreadsheet,
   Layers,
   Sparkles
 } from 'lucide-react';
-import { initialWizardStep2Data } from '../../data/mockWizardStep2';
 
 interface StepHeaderProps {
   onSaveDraft?: () => void;
@@ -22,87 +18,44 @@ interface StepHeaderProps {
 export const StepHeader: React.FC<StepHeaderProps> = ({
   onSaveDraft,
   onHotlineClick,
-  onStepClick,
-  onLogoClick
+  onStepClick
 }) => {
   return (
-    <header className="bg-white border-b border-slate-200/90 shadow-2xs">
-      {/* 1. Top Bar */}
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <div 
-          onClick={onLogoClick}
-          className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
-          title="Về Trang chủ Tổng quan quyết toán"
-        >
-          <div className="w-9 h-9 rounded-xl bg-[#046a4e] flex items-center justify-center text-white shadow-2xs shrink-0">
-            <FileText className="w-5 h-5 text-emerald-100" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 text-sm tracking-tight">ThuTra TNCN</span>
-              <span className="bg-[#dcfce7] text-[#15803d] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Quyết toán Thuế TNCN Thông minh
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-normal leading-tight mt-0.5">
-              Chuẩn Thông tư 78/2021/TT-BTC &amp; eTax Mobile
-            </span>
-          </div>
+    <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs space-y-3 mb-4">
+      {/* Top action row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="font-bold text-slate-800 text-xs sm:text-sm">
+            Quy trình quyết toán 3 bước • Bước 2: Thu nhập &amp; Chứng từ
+          </span>
         </div>
-
-        {/* Right Info & Actions */}
-        <div className="flex items-center gap-3.5 sm:gap-5 text-xs text-slate-600">
-          {/* Tax Period */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-medium text-slate-700 text-[11px]">
-              Kỳ quyết toán: <strong className="font-bold">{initialWizardStep2Data.currentPeriod}</strong>
-            </span>
-          </div>
-
-          {/* User MST */}
-          <div className="hidden md:flex items-center gap-1.5 text-slate-600">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#046a4e]" />
-            <div className="flex flex-col text-left">
-              <span className="font-bold text-[11px] text-slate-800 leading-tight">
-                MST: {initialWizardStep2Data.userMST}
-              </span>
-              <span className="text-[10px] text-slate-400 leading-tight">
-                {initialWizardStep2Data.userName}
-              </span>
-            </div>
-          </div>
-
-          {/* Hotline Legal */}
-          <button
-            onClick={onHotlineClick}
-            className="hidden sm:flex items-center gap-1 text-slate-500 hover:text-[#046a4e] transition-colors cursor-pointer text-xs"
-          >
-            <Headphones className="w-3.5 h-3.5 text-slate-400" />
-            <span>Hotline Pháp lý TNCN</span>
-          </button>
-
-          {/* Save & Exit Button */}
-          <button
-            onClick={onSaveDraft}
-            className="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all shadow-2xs cursor-pointer"
-          >
-            <Bookmark className="w-3.5 h-3.5 text-slate-400" />
-            <span>Lưu nháp &amp; Thoát</span>
-          </button>
-
-          {/* User Initials Badge */}
-          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 ring-1 ring-slate-300">
-            {initialWizardStep2Data.userInitials}
-          </div>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {onHotlineClick && (
+            <button
+              type="button"
+              onClick={onHotlineClick}
+              className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all shadow-2xs cursor-pointer text-xs"
+            >
+              <Headphones className="w-3.5 h-3.5 text-slate-500" />
+              <span>Hotline <strong>1900 6886</strong></span>
+            </button>
+          )}
+          {onSaveDraft && (
+            <button
+              type="button"
+              onClick={onSaveDraft}
+              className="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold px-3 py-1.5 rounded-xl transition-all shadow-2xs cursor-pointer text-xs"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+              <span>Lưu nháp &amp; Thoát</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* 2. Stepper 3-Step Bar */}
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pb-4">
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-2.5 shadow-2xs">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             {/* Step 1: Completed */}
             <div
               onClick={() => onStepClick && onStepClick(1)}
@@ -179,8 +132,6 @@ export const StepHeader: React.FC<StepHeaderProps> = ({
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </header>
+    </div>
   );
 };

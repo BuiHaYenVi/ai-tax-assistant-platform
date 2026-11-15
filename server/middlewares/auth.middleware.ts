@@ -25,20 +25,25 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
       );
     }
 
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (!match) {
       throw new UnauthorizedError(
         'Định dạng Authorization header không hợp lệ. Phải có tiền tố Bearer kèm khoảng trắng.',
         'MALFORMED_AUTH_HEADER'
       );
     }
 
-    const token = parts[1];
-    const payload = tokenService.verifyAccessToken(token);
+    const cleanToken = match[1].trim().replace(/^Bearer\s+/i, '').trim();
+    const payload = tokenService.verifyAccessToken(cleanToken);
+
+    const userId = (payload as any).userId || (payload as any).sub || (payload as any).id;
+    if (!userId) {
+      throw new UnauthorizedError('Token không chứa định danh người dùng hợp lệ.', 'INVALID_TOKEN_PAYLOAD');
+    }
 
     // Gán ngữ cảnh người dùng vào request để các tầng xử lý tiếp theo sử dụng
     req.user = {
-      id: payload.userId,
+      id: String(userId),
       email: payload.email,
       role: payload.role,
     };
@@ -47,6 +52,38 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   } catch (error) {
     next(error);
   }
+}
+
+/**
+ * Middleware xác thực tùy chọn (Optional Auth Middleware)
+ * Nếu có Token hợp lệ -> gán req.user.
+ * Nếu không có Token hoặc token không hợp lệ -> tiếp tục xử lý ở chế độ Guest.
+ */
+export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction): void {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!cleanToken) {
+      return next();
+    }
+
+    const payload = tokenService.verifyAccessToken(cleanToken);
+    const userId = (payload as any).userId || (payload as any).sub || (payload as any).id;
+    if (userId) {
+      req.user = {
+        id: String(userId),
+        email: payload.email,
+        role: payload.role,
+      };
+    }
+  } catch (err) {
+    // Bỏ qua lỗi token trong chế độ xác thực tùy chọn
+  }
+  next();
 }
 
 /**

@@ -132,7 +132,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-full bg-white border border-slate-200/90 rounded-2xl flex flex-col justify-between shadow-2xs select-none sticky top-20 min-h-[calc(100vh-6rem)]">
+    <div className="w-full bg-white border border-slate-200/90 rounded-2xl flex flex-col justify-between shadow-2xs select-none sticky top-[88px] min-h-[calc(100vh-7rem)]">
       <div className="p-4 flex flex-col">
         {/* Brand Header */}
         <div 
@@ -212,35 +212,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
-        {/* 2. SECTION: PHÂN HỆ QUẢN TRỊ (ADMIN) */}
-        <div className="space-y-1 mt-3 pt-2 border-t border-slate-100/80">
-          <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Phân hệ Quản trị (Admin)
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleItemClick('admin')}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer text-left ${
-              effectiveTab === 'admin'
-                ? 'bg-[#e7f5f0] text-[#046a4e] font-bold shadow-2xs ring-1 ring-[#046a4e]/20'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <SlidersHorizontal
-                className={`w-4 h-4 shrink-0 ${
-                  effectiveTab === 'admin' ? 'text-[#046a4e]' : 'text-slate-400'
-                }`}
-              />
-              <span className="whitespace-nowrap">Bộ máy Quy tắc & Vận hành</span>
+        {/* 2. SECTION: PHÂN HỆ QUẢN TRỊ (ADMIN) - Chỉ hiển thị cho các role Quản trị */}
+        {['admin_manager', 'super_admin', 'admin'].includes(user?.role || '') && (
+          <div className="space-y-1 mt-3 pt-2 border-t border-slate-100/80">
+            <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Phân hệ Quản trị (Admin)
             </div>
 
-            {effectiveTab === 'admin' && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#046a4e] shrink-0 ml-1"></span>
-            )}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => handleItemClick('admin')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer text-left ${
+                effectiveTab === 'admin'
+                  ? 'bg-[#e7f5f0] text-[#046a4e] font-bold shadow-2xs ring-1 ring-[#046a4e]/20'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <SlidersHorizontal
+                  className={`w-4 h-4 shrink-0 ${
+                    effectiveTab === 'admin' ? 'text-[#046a4e]' : 'text-slate-400'
+                  }`}
+                />
+                <span className="whitespace-nowrap">Bộ máy Quy tắc & Vận hành</span>
+              </div>
+
+              {effectiveTab === 'admin' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#046a4e] shrink-0 ml-1"></span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bottom Area: Secondary links, User info, Engine footer */}

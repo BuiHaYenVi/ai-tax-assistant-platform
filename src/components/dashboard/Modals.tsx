@@ -8,6 +8,7 @@ import {
   ShieldCheck 
 } from 'lucide-react';
 import { mockTaxData, mockTaxUser, formatVND } from '../../data/mockTaxData';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ModalProps {
   isOpen: boolean;
@@ -233,6 +234,7 @@ export const FullBracketsModal: React.FC<{ isOpen: boolean; onClose: () => void 
 
 // Modal: Xuất tờ khai 02/QTT & nộp eTax
 export const ExportDeclarationModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} title="Kiểm tra & Xuất tờ khai Quyết toán 02/QTT-TNCN">
       <div className="space-y-4 text-xs">
@@ -253,7 +255,7 @@ export const ExportDeclarationModal: React.FC<{ isOpen: boolean; onClose: () => 
           </div>
           <div className="flex justify-between py-1 border-b border-slate-100">
             <span className="text-slate-500">Người nộp thuế:</span>
-            <span className="font-semibold text-slate-800">{mockTaxUser.name} (MST: {mockTaxUser.mst})</span>
+            <span className="font-semibold text-slate-800">{user?.fullName || mockTaxUser.name} (MST: {user?.mst || mockTaxUser.mst})</span>
           </div>
           <div className="flex justify-between py-1 border-b border-slate-100">
             <span className="text-slate-500">Cơ quan thuế nhận:</span>

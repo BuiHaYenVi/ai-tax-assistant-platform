@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   CreditCard, 
@@ -29,6 +29,11 @@ import {
   X
 } from 'lucide-react';
 import type { ScreenType } from '../App';
+import { useAuth } from '../contexts/AuthContext';
+import { useTaxFiling } from '../contexts/TaxFilingContext';
+import { useToast } from '../contexts/ToastContext';
+import { storageUtil } from '../utils/storage.util';
+import type { UpdateUserProfileDto } from '../types/business.types';
 import type { 
   TaxpayerProfile, 
   BankAccountInfo, 
@@ -43,6 +48,65 @@ import {
   TAX_DEPARTMENTS_OPTIONS
 } from '../data/mockUserProfile';
 
+/**
+ * Chuẩn hóa chuỗi ngày sinh về định dạng chuẩn ISO 'YYYY-MM-DD'
+ */
+function formatToIsoDate(val?: string | null): string | undefined {
+  if (!val) return undefined;
+  const str = String(val).trim();
+  if (!str) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10);
+  }
+  return undefined;
+}
+
+/**
+ * Chuẩn hóa đối tượng Profile người nộp thuế, bảo đảm không bao giờ có giá trị null hoặc undefined
+ */
+function getInitialProfile(raw: any): TaxpayerProfile {
+  const isMock = !raw;
+  const cccdVal = raw?.cccd ?? raw?.idCard ?? raw?.idNumber ?? (isMock ? initialTaxpayerProfile.idCard : '') ?? '';
+  const mstVal = raw?.mst ?? raw?.taxCode ?? (isMock ? initialTaxpayerProfile.mst : '') ?? '';
+  const addressVal = raw?.address ?? (isMock ? initialTaxpayerProfile.address : '') ?? '';
+  let dobVal = '';
+  if (raw?.dateOfBirth) {
+    dobVal = String(raw.dateOfBirth).slice(0, 10);
+  } else if (raw?.dob) {
+    dobVal = String(raw.dob).slice(0, 10);
+  } else if (isMock && initialTaxpayerProfile.dob) {
+    dobVal = String(initialTaxpayerProfile.dob).slice(0, 10);
+  }
+
+  return {
+    fullName: raw?.fullName ?? (isMock ? initialTaxpayerProfile.fullName : '') ?? '',
+    phone: raw?.phone ?? (isMock ? initialTaxpayerProfile.phone : '') ?? '',
+    idCard: cccdVal,
+    cccd: cccdVal,
+    idNumber: cccdVal,
+    idCardType: raw?.idCardType ?? initialTaxpayerProfile.idCardType ?? 'Định danh 12 số',
+    email: raw?.email ?? (isMock ? initialTaxpayerProfile.email : '') ?? '',
+    emailVerified: raw?.emailVerified ?? true,
+    mst: mstVal,
+    taxCode: mstVal,
+    mstStatus: raw?.mstStatus ?? initialTaxpayerProfile.mstStatus ?? 'Mã số thuế chính thức',
+    mstLinkedNote: raw?.mstLinkedNote ?? initialTaxpayerProfile.mstLinkedNote ?? 'Khớp 100% với CSDL Tổng cục Thuế',
+    address: addressVal,
+    dob: dobVal,
+    dateOfBirth: dobVal,
+    taxDepartment: raw?.taxDepartmentName ?? raw?.taxDepartment ?? (isMock ? initialTaxpayerProfile.taxDepartment : '') ?? 'Chi cục Thuế Quận Bình Thạnh (TP.HCM)',
+    taxDepartmentParent: raw?.taxDepartmentParent ?? initialTaxpayerProfile.taxDepartmentParent ?? 'Trực thuộc Cục Thuế TP. Hồ Chí Minh',
+    avatarInitials: raw?.avatarInitials ?? (raw?.fullName ? raw.fullName.slice(0, 2).toUpperCase() : 'TN'),
+    plan: raw?.plan ?? initialTaxpayerProfile.plan ?? 'Gói Cá Nhân (Cơ bản)',
+    cccdChipVerified: raw?.isVneidVerified ?? raw?.cccdChipVerified ?? true,
+    status2024: raw?.status2024 ?? initialTaxpayerProfile.status2024 ?? 'Đã hoàn tất',
+  };
+}
+
 interface ProfileSettingsPageProps {
   onNavigate?: (screen: ScreenType) => void;
   onNavigateToDashboard?: () => void;
@@ -55,28 +119,54 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
   onLogout,
 }) => {
 
+  const { user, updateUserProfile, refreshProfile, refreshUser } = useAuth();
+  const { activeProfile, updateActiveProfile } = useTaxFiling();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+
   // Horizontal Profile Tabs state
   const [activeTab, setActiveTab] = useState<'profile' | 'bank' | 'security' | 'privacy'>('profile');
 
-  // Form State: Taxpayer Info
+  // Form State: Taxpayer Info (Khởi tạo an toàn tuyệt đối tránh lỗi controlled input)
   const [profile, setProfile] = useState<TaxpayerProfile>(() => {
     const saved = localStorage.getItem('thutra_user_profile');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return getInitialProfile(JSON.parse(saved));
       } catch {
-        return initialTaxpayerProfile;
+        return getInitialProfile(null);
       }
     }
-    return initialTaxpayerProfile;
+    return getInitialProfile(null);
   });
+
+  // Tự động đồng bộ form khi thông tin user từ AuthContext thay đổi
+  useEffect(() => {
+    if (user) {
+      setProfile((prev) => ({
+        ...prev,
+        ...getInitialProfile(user),
+      }));
+    }
+  }, [user]);
 
   // Form State: Bank Account Info
   const [bankInfo, setBankInfo] = useState<BankAccountInfo>(() => {
     const saved = localStorage.getItem('thutra_bank_info');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          bankName: parsed.bankName ?? initialBankAccountInfo.bankName ?? '',
+          bankShortName: parsed.bankShortName ?? initialBankAccountInfo.bankShortName ?? '',
+          bankBranch: parsed.bankBranch ?? initialBankAccountInfo.bankBranch ?? '',
+          accountNumber: parsed.accountNumber ?? initialBankAccountInfo.accountNumber ?? '',
+          accountHolder: parsed.accountHolder ?? initialBankAccountInfo.accountHolder ?? '',
+          isDefault: parsed.isDefault ?? true,
+          etaxReady: parsed.etaxReady ?? true,
+          napasMatched: parsed.napasMatched ?? true,
+          matchRate: parsed.matchRate ?? '100%',
+        };
       } catch {
         return initialBankAccountInfo;
       }
@@ -111,19 +201,120 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
 
   // Handlers
   const handleProfileChange = (field: keyof TaxpayerProfile, value: string | boolean) => {
-    setProfile(prev => ({
-      ...prev,
-      [field]: value,
-    }));
+    const val = value ?? '';
+    setProfile(prev => {
+      const updated = {
+        ...prev,
+        [field]: val,
+      };
+      if (field === 'idCard' || field === 'cccd' || field === 'idNumber') {
+        const strVal = String(val);
+        updated.idCard = strVal;
+        updated.cccd = strVal;
+        updated.idNumber = strVal;
+      }
+      if (field === 'mst' || field === 'taxCode') {
+        const strVal = String(val);
+        updated.mst = strVal;
+        updated.taxCode = strVal;
+      }
+      if (field === 'dob' || field === 'dateOfBirth') {
+        const strVal = String(val);
+        updated.dob = strVal;
+        updated.dateOfBirth = strVal;
+      }
+      return updated;
+    });
   };
 
-  const handleSaveProfile = (e?: React.FormEvent) => {
+  const handleSaveProfile = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    localStorage.setItem('thutra_user_profile', JSON.stringify(profile));
-    setToastMessage('✓ Đã cập nhật thông tin hồ sơ thành công! Dữ liệu đã sẵn sàng cho tờ khai thuế 2024.');
-    setTimeout(() => {
-      // Keep visible or auto fade after 5s
-    }, 5000);
+
+    // 1. Kiểm tra định dạng CCCD/CMND 12 chữ số
+    const rawCccd = (profile.cccd || profile.idCard || profile.idNumber || '').trim();
+    const cleanIdCard = rawCccd.replace(/\D/g, '');
+    if (cleanIdCard && cleanIdCard.length !== 12) {
+      alert('Số CCCD / Mã định danh cá nhân phải gồm đúng 12 chữ số theo quy chuẩn Đề án 06!');
+      return;
+    }
+
+    // 2. Định dạng ngày sinh ISO (YYYY-MM-DD)
+    const rawDob = profile.dob || profile.dateOfBirth;
+    const formattedDob = formatToIsoDate(rawDob);
+
+    const cccdVal = cleanIdCard || rawCccd;
+    const mstVal = (profile.mst || profile.taxCode || '').trim();
+    const addressVal = (profile.address || '').trim();
+
+    const payload: UpdateUserProfileDto = {
+      fullName: profile.fullName.trim(),
+      phone: profile.phone.trim(),
+      address: addressVal,
+      mst: mstVal,
+      taxCode: mstVal,
+      cccd: cccdVal,
+      idNumber: cccdVal,
+      idCard: cccdVal,
+      dateOfBirth: formattedDob,
+      dob: formattedDob,
+      taxDepartmentName: profile.taxDepartment,
+    };
+
+    console.log('[handleSaveProfile] Payload gửi lên updateUserProfile:', payload);
+
+    if (!storageUtil.hasValidAuth()) {
+      alert('Phiên làm việc đã hết hạn hoặc không tìm thấy token đăng nhập. Vui lòng đăng nhập lại để thực hiện lưu thông tin.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 3. Cập nhật thông tin lên backend User Profile qua AuthContext
+      await updateUserProfile(payload);
+
+      // 4. Đồng bộ thêm với Tax Profile (Kỳ quyết toán hiện hành) nếu đang mở hồ sơ
+      if (activeProfile?.id && typeof updateActiveProfile === 'function') {
+        try {
+          await updateActiveProfile({
+            taxDepartmentName: profile.taxDepartment,
+          });
+        } catch (tpErr) {
+          console.warn('[ProfileSettingsPage] Không thể đồng bộ cơ quan thuế sang Tax Profile:', tpErr);
+        }
+      }
+
+      // 5. Đồng bộ State toàn cục để Header cập nhật tên ngay lập tức mà không cần F5
+      if (typeof refreshUser === 'function') {
+        await refreshUser();
+      } else if (typeof refreshProfile === 'function') {
+        await refreshProfile();
+      }
+
+      // Lưu trữ cục bộ
+      const updatedProfileObj = {
+        ...profile,
+        fullName: profile.fullName.trim(),
+        phone: profile.phone.trim(),
+        address: addressVal,
+        mst: mstVal,
+        taxCode: mstVal,
+        idCard: cccdVal,
+        cccd: cccdVal,
+        idNumber: cccdVal,
+        dob: formattedDob || profile.dob,
+        dateOfBirth: formattedDob || profile.dateOfBirth,
+        taxDepartment: profile.taxDepartment,
+      };
+      localStorage.setItem('thutra_user_profile', JSON.stringify(updatedProfileObj));
+
+      setToastMessage('✓ Đã cập nhật thông tin hồ sơ người nộp thuế thành công!');
+      toast.success('✓ Đã cập nhật thông tin hồ sơ người nộp thuế thành công!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Có lỗi xảy ra khi cập nhật hồ sơ cá nhân.';
+      toast.error(msg);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCopyMst = () => {
@@ -151,25 +342,29 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setToastMessage('✓ Đã sao lưu dữ liệu cục bộ thành công vào tệp JSON!');
+    toast.success('✓ Đã sao lưu dữ liệu cục bộ thành công vào tệp JSON!');
   };
 
   const handlePasswordUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 8) {
-      alert('Mật khẩu mới phải có ít nhất 8 ký tự!');
+      toast.warning('Mật khẩu mới phải có ít nhất 8 ký tự!');
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert('Xác nhận mật khẩu mới không trùng khớp!');
+      toast.error('Xác nhận mật khẩu mới không trùng khớp!');
       return;
     }
     setNewPassword('');
     setConfirmPassword('');
     setToastMessage('✓ Đã cập nhật mật khẩu bảo mật mới thành công!');
+    toast.success('✓ Đã cập nhật mật khẩu bảo mật mới thành công!');
   };
 
   const handleCheckNapas = () => {
-    setToastMessage('✓ Napas xác nhận: Tài khoản ngân hàng khớp 100% với CCCD ' + profile.idCard);
+    const msg = '✓ Napas xác nhận: Tài khoản ngân hàng khớp 100% với CCCD ' + (profile.cccd || profile.idCard);
+    setToastMessage(msg);
+    toast.success(msg);
   };
 
   const scrollToSection = (sectionId: string, tab: 'profile' | 'bank' | 'security' | 'privacy') => {
@@ -361,7 +556,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      value={profile.fullName}
+                      value={profile.fullName ?? ''}
                       onChange={(e) => handleProfileChange('fullName', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800"
                       required
@@ -378,7 +573,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="tel"
-                      value={profile.phone}
+                      value={profile.phone ?? ''}
                       onChange={(e) => handleProfileChange('phone', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800"
                       required
@@ -400,8 +595,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <CreditCard className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      value={profile.idCard}
-                      onChange={(e) => handleProfileChange('idCard', e.target.value)}
+                      value={profile.cccd || profile.idCard || ''}
+                      onChange={(e) => handleProfileChange('cccd', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800 font-mono"
                       required
                     />
@@ -422,12 +617,17 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
-                      value={profile.email}
-                      onChange={(e) => handleProfileChange('email', e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800"
+                      value={profile.email ?? ''}
+                      readOnly
+                      disabled
+                      title="Email dùng để đăng nhập và định danh tài khoản, không thể thay đổi."
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed select-none focus:outline-none"
                       required
                     />
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Định danh tài khoản đăng nhập (Cố định bảo mật)
+                  </p>
                 </div>
 
                 {/* 5. Mã số thuế cá nhân (MST) */}
@@ -444,7 +644,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <span className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold">#</span>
                     <input
                       type="text"
-                      value={profile.mst}
+                      value={profile.mst || profile.taxCode || ''}
                       onChange={(e) => handleProfileChange('mst', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800 font-mono font-medium"
                       required
@@ -464,7 +664,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      value={profile.address}
+                      value={profile.address ?? ''}
                       onChange={(e) => handleProfileChange('address', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800"
                       required
@@ -481,8 +681,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="date"
-                      value={profile.dob}
-                      onChange={(e) => handleProfileChange('dob', e.target.value)}
+                      value={profile.dateOfBirth || profile.dob || ''}
+                      onChange={(e) => handleProfileChange('dateOfBirth', e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800"
                       required
                     />
@@ -497,7 +697,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                   <div className="relative">
                     <Building className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <select
-                      value={profile.taxDepartment}
+                      value={profile.taxDepartment ?? ''}
                       onChange={(e) => handleProfileChange('taxDepartment', e.target.value)}
                       className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#046a4e]/20 focus:border-[#046a4e] text-slate-800 appearance-none cursor-pointer"
                     >
@@ -547,17 +747,18 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setProfile(initialTaxpayerProfile)}
+                  onClick={() => setProfile(getInitialProfile(user))}
                   className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-xs font-semibold text-white bg-[#046a4e] hover:bg-[#03543e] rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-[#046a4e] hover:bg-[#03543e] disabled:opacity-60 disabled:cursor-not-allowed rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
                   <Check className="w-4 h-4 text-emerald-200" />
-                  <span>Lưu thay đổi thông tin cá nhân</span>
+                  <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi thông tin cá nhân'}</span>
                 </button>
               </div>
             </form>

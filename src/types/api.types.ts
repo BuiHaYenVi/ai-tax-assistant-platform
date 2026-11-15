@@ -187,6 +187,8 @@ export interface UserContextDto {
   phone?: string;
   cccd?: string;
   mst?: string;
+  address?: string;
+  dateOfBirth?: string;
   taxDepartmentCode?: string;
   taxDepartmentName?: string;
   isVneidVerified?: boolean;

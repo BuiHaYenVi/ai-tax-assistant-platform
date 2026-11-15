@@ -54,6 +54,12 @@ export class ValidationError extends AppError {
   }
 }
 
+export class BadRequestError extends AppError {
+  constructor(message: string = 'Yêu cầu không hợp lệ.', errorCode: string = 'BAD_REQUEST') {
+    super(message, 400, errorCode);
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message: string = 'Tài nguyên đã tồn tại hoặc xảy ra xung đột dữ liệu.', errorCode: string = 'CONFLICT') {
     super(message, 409, errorCode);

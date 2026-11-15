@@ -46,6 +46,8 @@ export interface AuthUserDto {
   fullName: string;
   cccd?: string | null;
   mst?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
   role: UserRole;
   status: UserStatus;
   isVneidVerified: boolean;
@@ -74,6 +76,10 @@ export interface LoginResponseDto {
     status: UserStatus;
     mst?: string | null;
     cccd?: string | null;
+    address?: string | null;
+    dateOfBirth?: string | null;
+    taxDepartmentName?: string | null;
+    taxDepartmentCode?: string | null;
   };
 }
 
@@ -104,12 +110,20 @@ export interface UserDbEntity {
 }
 
 /**
+ * DTO gửi mã OTP đăng ký tài khoản
+ */
+export interface SendRegisterOtpDto {
+  email: string;
+}
+
+/**
  * DTO đăng ký tài khoản người nộp thuế mới
  */
 export interface RegisterRequestDto {
   fullName: string;
   email: string;
   password: string;
+  otpCode?: string;
   phone?: string;
   cccd?: string;
 }
@@ -121,8 +135,15 @@ export interface UpdateProfileDto {
   fullName?: string;
   phone?: string;
   address?: string;
+  mst?: string;
+  taxCode?: string;
   taxDepartmentCode?: string;
   taxDepartmentName?: string;
+  cccd?: string;
+  idNumber?: string;
+  idCard?: string;
+  dateOfBirth?: string;
+  dob?: string;
 }
 
 /**

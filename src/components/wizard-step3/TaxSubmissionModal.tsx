@@ -1,4 +1,7 @@
 import React, { useEffect } from 'react';
+import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTaxFiling } from '../../contexts/TaxFilingContext';
 import { 
   Clock, 
   X, 
@@ -23,6 +26,8 @@ export const TaxSubmissionModal: React.FC<TaxSubmissionModalProps> = ({
   taxOffice = 'Chi cục Thuế Q. Bình Thạnh',
   onDownloadXml
 }) => {
+  const { toast } = useToast();
+  const { user } = useAuth();
   // Đóng modal khi nhấn phím Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -36,22 +41,42 @@ export const TaxSubmissionModal: React.FC<TaxSubmissionModalProps> = ({
 
   if (!isOpen) return null;
 
+  const { activeProfile, latestAuditResult, incomeSources, dependents } = useTaxFiling();
+  const calc = latestAuditResult?.calculation;
+
   // Xử lý tải file XML trực tiếp
   const handleDownload = () => {
     if (onDownloadXml) {
       onDownloadXml();
     } else {
-      const mockXmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+      const taxYear = activeProfile?.taxYear || 2025;
+      const gross = calc?.grossIncome || activeProfile?.financialSummary?.totalTaxableIncome || 0;
+      const deductions = calc?.totalDeductions || ((activeProfile?.financialSummary?.personalDeductionAmount || 132000000) + (activeProfile?.financialSummary?.dependentDeductionAmount || 0) + (activeProfile?.financialSummary?.insuranceDeductionAmount || 0));
+      const taxable = calc?.taxableIncome || activeProfile?.financialSummary?.assessableIncome || 0;
+      const liability = calc?.taxLiability || activeProfile?.financialSummary?.taxPayable || 0;
+      const withheld = calc?.taxDeducted || activeProfile?.financialSummary?.taxWithheldTotal || 0;
+      const refund = calc ? calc.taxRefund : (withheld > liability ? withheld - liability : 0);
+      const payable = calc ? calc.taxPayable : (liability > withheld ? liability - withheld : 0);
+
+      const dynamicXmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <HDon xmlns="http://kekhaithue.gdt.gov.vn/TKhai/02_QTT_TNCN_2024">
   <ThongTinChung>
-    <KyTinhThue>2024</KyTinhThue>
-    <MST>8492019381</MST>
-    <TenNNT>Nguyễn Hoàng Nam</TenNNT>
+    <KyTinhThue>${taxYear}</KyTinhThue>
+    <MST>${user?.mst || '8492019482'}</MST>
+    <TenNNT>${user?.fullName || 'Người nộp thuế'}</TenNNT>
     <CoQuanThue>${taxOffice}</CoQuanThue>
-    <SoTienHoan>4850000</SoTienHoan>
+    <TongThuNhapChiuThue>${gross}</TongThuNhapChiuThue>
+    <TongCacKhoanGiamTru>${deductions}</TongCacKhoanGiamTru>
+    <ThuNhapTinhThue>${taxable}</ThuNhapTinhThue>
+    <ThuePhatSinhTheoLuyTien>${liability}</ThuePhatSinhTheoLuyTien>
+    <ThueDaKhauTru>${withheld}</ThueDaKhauTru>
+    <SoTienHoan>${refund}</SoTienHoan>
+    <SoTienNopThem>${payable}</SoTienNopThem>
+    <SoLuongNguoiPhuThuoc>${dependents.length}</SoLuongNguoiPhuThuoc>
+    <SoLuongNguonThuNhap>${incomeSources.length}</SoLuongNguonThuNhap>
   </ThongTinChung>
 </HDon>`;
-      const blob = new Blob([mockXmlContent], { type: 'application/xml;charset=utf-8;' });
+      const blob = new Blob([dynamicXmlContent], { type: 'application/xml;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -60,6 +85,7 @@ export const TaxSubmissionModal: React.FC<TaxSubmissionModalProps> = ({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      toast.success('✓ Xuất tờ khai 02/QTT-TNCN chuẩn XML thành công! Sẵn sàng nộp Tổng cục Thuế.', `Tệp: ${fileName}`);
     }
   };
 

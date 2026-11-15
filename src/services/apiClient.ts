@@ -45,9 +45,11 @@ export const axiosInstance: AxiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     // 1.1. Tự động lấy Access Token từ Storage và gắn vào Header
-    const token = storageUtil.getAccessToken();
-    if (token) {
-      config.headers.set('Authorization', `Bearer ${token}`);
+    const rawToken = storageUtil.getAccessToken();
+    if (rawToken) {
+      const cleanToken = rawToken.replace(/^Bearer\s+/i, '').trim();
+      config.headers.set('Authorization', `Bearer ${cleanToken}`);
+      config.headers['Authorization'] = `Bearer ${cleanToken}`;
     }
 
     // 1.2. Nhận diện truyền tải tệp tin Multipart FormData
@@ -63,34 +65,117 @@ axiosInstance.interceptors.request.use(
   }
 );
 
+// Hàng đợi phục vụ cơ chế tự động Refresh Token khi gặp lỗi 401
+let isRefreshingToken = false;
+let refreshQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
+
+const processRefreshQueue = (error: unknown, token: string | null = null) => {
+  refreshQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  refreshQueue = [];
+};
+
 // ==============================================================================
-// 2. RESPONSE INTERCEPTOR: BÓC TÁCH DTO, BẮT MÃ LỖI 401 & CHUYỂN ĐỔI APICLIENTERROR
+// 2. RESPONSE INTERCEPTOR: BÓC TÁCH DTO, AUTO-REFRESH TOKEN & BẮT MÃ LỖI 401
 // ==============================================================================
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse): AxiosResponse => {
     // Trả về response nguyên bản chứa response.data chuẩn ApiResponse<T>
     return response;
   },
-  (error: any) => {
+  async (error: any) => {
+    const originalRequest = error?.config;
+
     // 2.1. Trường hợp Máy chủ có phản hồi (HTTP Status Codes 4xx, 5xx)
     if (error && error.response) {
       const statusCode = Number(error.response.status) || 500;
       const errorPayload = error.response.data as ApiErrorResponse | undefined;
 
-      // Xử lý biến cố 401 Unauthorized: Phiên làm việc hết hạn hoặc token không hợp lệ
-      if (statusCode === 401) {
-        storageUtil.clearAllAuthData();
+      // Xử lý biến cố 401 Unauthorized: Cố gắng tự động refresh token nếu có refreshToken
+      if (
+        statusCode === 401 &&
+        originalRequest &&
+        !originalRequest._retry &&
+        !originalRequest.url?.includes('/auth/login') &&
+        !originalRequest.url?.includes('/auth/refresh')
+      ) {
+        const refreshToken = storageUtil.getRefreshToken();
 
-        if (typeof window !== 'undefined') {
-          // Phát sự kiện toàn cục để giao diện người dùng chuyển về màn hình Login mượt mà
-          window.dispatchEvent(
-            new CustomEvent('thutra:unauthorized', {
-              detail: {
-                message: errorPayload?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',
-                timestamp: new Date().toISOString(),
-              },
+        if (refreshToken) {
+          if (isRefreshingToken) {
+            return new Promise((resolve, reject) => {
+              refreshQueue.push({ resolve, reject });
             })
-          );
+              .then((newToken) => {
+                originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                return axiosInstance(originalRequest);
+              })
+              .catch((err) => Promise.reject(ApiClientError.fromError(err)));
+          }
+
+          originalRequest._retry = true;
+          isRefreshingToken = true;
+
+          try {
+            const cleanRefresh = refreshToken.replace(/^Bearer\s+/i, '').trim();
+            const refreshRes = await axios.post<ApiResponse<{ accessToken: string; refreshToken?: string }>>(
+              `${API_BASE_URL}/auth/refresh`,
+              { refreshToken: cleanRefresh },
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+
+            if (refreshRes.data && refreshRes.data.data?.accessToken) {
+              const newAccessToken = refreshRes.data.data.accessToken;
+              storageUtil.setAccessToken(newAccessToken);
+              if (refreshRes.data.data.refreshToken) {
+                storageUtil.setRefreshToken(refreshRes.data.data.refreshToken);
+              }
+
+              axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+              originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+
+              processRefreshQueue(null, newAccessToken);
+              return axiosInstance(originalRequest);
+            }
+          } catch (refreshErr) {
+            processRefreshQueue(refreshErr, null);
+            storageUtil.clearAllAuthData();
+
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('thutra:unauthorized', {
+                  detail: {
+                    message: 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',
+                    timestamp: new Date().toISOString(),
+                  },
+                })
+              );
+            }
+            return Promise.reject(ApiClientError.fromError(refreshErr));
+          } finally {
+            isRefreshingToken = false;
+          }
+        } else {
+          // Không có refresh token trong storage
+          storageUtil.clearAllAuthData();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('thutra:unauthorized', {
+                detail: {
+                  message: errorPayload?.message || 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',
+                  timestamp: new Date().toISOString(),
+                },
+              })
+            );
+          }
         }
       }
 

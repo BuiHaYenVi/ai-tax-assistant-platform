@@ -2,6 +2,7 @@ export interface PersonalTaxpayer {
   fullName: string;
   cccd: string;
   mst: string;
+  taxOffice?: string;
   phone: string;
   email: string;
   address: string;

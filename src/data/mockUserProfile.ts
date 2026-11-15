@@ -2,14 +2,18 @@ export interface TaxpayerProfile {
   fullName: string;
   phone: string;
   idCard: string;
+  cccd?: string;
+  idNumber?: string;
   idCardType: string;
   email: string;
   emailVerified: boolean;
   mst: string;
+  taxCode?: string;
   mstStatus: string;
   mstLinkedNote: string;
   address: string;
   dob: string;
+  dateOfBirth?: string;
   taxDepartment: string;
   taxDepartmentParent: string;
   avatarInitials: string;
